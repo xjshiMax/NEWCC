@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <sstream>
 #include "../esl/esl_json.h"
 #include "speech/common.h"
 
@@ -15,10 +16,10 @@ using namespace std;
 
 struct tts_config
 {
-  char api_key[40];       // å¡«å†™ç½‘é¡µä¸Šç”³è¯·çš„appkey å¦‚ $apiKey="g8eBUMSokVB1BHGmgxxxxxx"
-  char secret_key[40];    // å¡«å†™ç½‘é¡µä¸Šç”³è¯·çš„APP SECRET å¦‚ $secretKey="94dc99566550d87f8fa8ece112xxxxx"
-  char text[512 * 3 + 1]; // éœ€è¦åˆæˆçš„æ–‡æœ¬  æœ€å¤š512ä¸ªæ±‰å­—
-  int text_len;           // æ–‡æœ¬çš„é•¿åº¦
+  char api_key[40];       // ÌîĞ´ÍøÒ³ÉÏÉêÇëµÄappkey Èç $apiKey="g8eBUMSokVB1BHGmgxxxxxx"
+  char secret_key[40];    // ÌîĞ´ÍøÒ³ÉÏÉêÇëµÄAPP SECRET Èç $secretKey="94dc99566550d87f8fa8ece112xxxxx"
+  char text[512 * 3 + 1]; // ĞèÒªºÏ³ÉµÄÎÄ±¾  ×î¶à512¸öºº×Ö
+  int text_len;           // ÎÄ±¾µÄ³¤¶È
   char cuid[20];
   int spd;
   int pit;
@@ -31,12 +32,12 @@ struct tts_config
 class codeHelper
 {
 private:
-  //æ„é€ å‡½æ•°ç§æœ‰åŒ–
+  //¹¹Ôìº¯ÊıË½ÓĞ»¯
   codeHelper()
   {
   }
   static codeHelper *m_pInstance;
-  class CGarbo //å®ƒçš„å”¯ä¸€å·¥ä½œå°±æ˜¯åœ¨ææ„å‡½æ•°ä¸­åˆ é™¤CSingletonçš„å®ä¾‹
+  class CGarbo //ËüµÄÎ¨Ò»¹¤×÷¾ÍÊÇÔÚÎö¹¹º¯ÊıÖĞÉ¾³ıCSingletonµÄÊµÀı
   {
   public:
     ~CGarbo()
@@ -71,17 +72,17 @@ private:
 
 
   /**
- * ç”¨ä»¥è·å–access_tokençš„å‡½æ•°ï¼Œä½¿ç”¨æ—¶éœ€è¦å…ˆåœ¨ç™¾åº¦äº‘æ§åˆ¶å°ç”³è¯·ç›¸åº”åŠŸèƒ½çš„åº”ç”¨ï¼Œè·å¾—å¯¹åº”çš„API Keyå’ŒSecret Key
- * @param access_token è·å–å¾—åˆ°çš„access tokenï¼Œè°ƒç”¨å‡½æ•°æ—¶éœ€ä¼ å…¥è¯¥å‚æ•°
- * @param AK åº”ç”¨çš„API key
- * @param SK åº”ç”¨çš„Secret key
- * @return è¿”å›0ä»£è¡¨è·å–access tokenæˆåŠŸï¼Œå…¶ä»–è¿”å›å€¼ä»£è¡¨è·å–å¤±è´¥
+ * ÓÃÒÔ»ñÈ¡access_tokenµÄº¯Êı£¬Ê¹ÓÃÊ±ĞèÒªÏÈÔÚ°Ù¶ÈÔÆ¿ØÖÆÌ¨ÉêÇëÏàÓ¦¹¦ÄÜµÄÓ¦ÓÃ£¬»ñµÃ¶ÔÓ¦µÄAPI KeyºÍSecret Key
+ * @param access_token »ñÈ¡µÃµ½µÄaccess token£¬µ÷ÓÃº¯ÊıÊ±Ğè´«Èë¸Ã²ÎÊı
+ * @param AK Ó¦ÓÃµÄAPI key
+ * @param SK Ó¦ÓÃµÄSecret key
+ * @return ·µ»Ø0´ú±í»ñÈ¡access token³É¹¦£¬ÆäËû·µ»ØÖµ´ú±í»ñÈ¡Ê§°Ü
  */
   int get_access_token(std::string &access_token, const std::string &AK, const std::string &SK);
 
-  static CGarbo Garbo; //å®šä¹‰ä¸€ä¸ªé™æ€æˆå‘˜å˜é‡ï¼Œç¨‹åºç»“æŸæ—¶ï¼Œç³»ç»Ÿä¼šè‡ªåŠ¨è°ƒç”¨å®ƒçš„ææ„å‡½æ•°
+  static CGarbo Garbo; //¶¨ÒåÒ»¸ö¾²Ì¬³ÉÔ±±äÁ¿£¬³ÌĞò½áÊøÊ±£¬ÏµÍ³»á×Ô¶¯µ÷ÓÃËüµÄÎö¹¹º¯Êı
 public:
-  static codeHelper *GetInstance(); //è·å–å®ä¾‹
+  static codeHelper *GetInstance(); //»ñÈ¡ÊµÀı
   std::string UrlDecode(const std::string &str);
   string emsCallbackRequest(const string &phone, const string &state,
                             const string &type, const string &content, const string &recordId, const string &order_id);

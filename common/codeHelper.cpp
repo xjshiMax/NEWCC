@@ -9,13 +9,10 @@
 #include "speech/ttscurl.c"
 #include "../database/config/inirw.h"
 
-#include <boost/locale.hpp>
 
-#include <iconv.h>
 
-#include "/root/package/jsoncpp-master/include/json/json.h"
 
-#include "nlp/nlp.h"
+
 
 // 设置APPID/AK/SK
 const std::string app_id = ""; //"你的 App ID";
@@ -23,7 +20,7 @@ const std::string api_key = "7ZM7qRbFdrBF701okoSXyY5L";
 const std::string secret_key = "uEAf5uIe0H3NDeDlA2HKe6BKalh65G4s";
 
 const char TTS_SCOPE[] = "audio_tts_post";
-const char API_TTS_URL[] = "http://tsn.baidu.com/text2audio"; // 可改为https
+const char API_TTS_URL[] = "http://tsn.baidu.com/text2audio"; // �?改为https
 const int ENABLE_CURL_VERBOSE = 0;
 
 // 获取access_token所需要的url
@@ -32,13 +29,13 @@ const std::string access_token_url = "https://aip.baidubce.com/oauth/2.0/token?g
 codeHelper *codeHelper::m_pInstance = NULL;
 
 /**
- * curl发送http请求调用的回调函数，回调函数中对返回的json格式的body进行了解析，解析结果储存在result中
- * @param 参数定义见libcurl库文档
- * @return 返回值定义见libcurl库文档
+ * curl发送http请求调用的回调函数，回调函数�?对返回的json格式的body进�?�了解析，解析结果储存在result�?
+ * @param 参数定义见libcurl库文�?
+ * @return 返回值定义�?�libcurl库文�?
  */
 static size_t token_callback(void *ptr, size_t size, size_t nmemb, void *stream)
 {
-    // 获取到的body存放在ptr中，先将其转换为string格式
+    // 获取到的body存放在ptr�?，先将其�?�?为string格式
     std::string s((char *)ptr, size * nmemb);
 
     printf("token_callback=%s\n", s.c_str());
@@ -176,15 +173,15 @@ string codeHelper::sentiment_classifyRequesst(const string &text)
 
     if (NULL != pCurl)
     {
-        // 设置超时时间为1秒
-        curl_easy_setopt(pCurl, CURLOPT_TIMEOUT, 10);
+        // 设置超时时间�?1�?
+        curl_easy_setopt(pCurl, CURLOPT_TIMEOUT, 5);
 
         // First set the URL that is about to receive our POST.
         // This URL can just as well be a
         // https:// URL if that is what should receive the data.
         curl_easy_setopt(pCurl, CURLOPT_URL, "http://www.forevermaybe.xyz/sentiment_classify");
 
-        // 设置http发送的内容类型为JSON
+        // 设置http发送的内�?�类型为JSON
         curl_slist *plist = curl_slist_append(NULL, "Content-Type:application/json; charset=utf-8");
         // curl_slist_append(plist, "Accept:application/json");
         curl_easy_setopt(pCurl, CURLOPT_HTTPHEADER, plist);
@@ -215,15 +212,15 @@ string codeHelper::sentiment_classifyRequesst(const string &text)
 
 // 组发消息接口
 // "{\n" +
-//                 "    \"batchName\": \"玄武无线科技组发测试\",\n" +
+//                 "    \"batchName\": \"玄�?�无线�?�技组发测试\",\n" +
 //                 "    \"items\": [\n" +
 //                 "        {\n" +
 //                 "            \"to\": \"15811112222\",\n" +
-//                 "            \"content\": \"玄武科技测试短信01\"\n" +
+//                 "            \"content\": \"玄�?��?�技测试�?�?01\"\n" +
 //                 "        },\n" +
 //                 "        {\n" +
 //                 "            \"to\": \"13511112222\",\n" +
-//                 "            \"content\": \"玄武科技测试短信02\"\n" +
+//                 "            \"content\": \"玄�?��?�技测试�?�?02\"\n" +
 //                 "        }\n" +
 //                 "    ],\n" +
 //                 "    \"msgType\": \"sms\",\n" +
@@ -309,7 +306,7 @@ string codeHelper::emsCallbackRequest(const string &phone,
 
     if (NULL != pCurl)
     {
-        // 设置超时时间为1秒
+        // 设置超时时间�?1�?
         curl_easy_setopt(pCurl, CURLOPT_TIMEOUT, 1);
 
         // First set the URL that is about to receive our POST.
@@ -317,7 +314,7 @@ string codeHelper::emsCallbackRequest(const string &phone,
         // https:// URL if that is what should receive the data.
         curl_easy_setopt(pCurl, CURLOPT_URL, emsUrl);
 
-        // 设置http发送的内容类型为JSON
+        // 设置http发送的内�?�类型为JSON
         curl_slist *plist = curl_slist_append(NULL, "Content-Type: text/plain; charset=utf-8");
         curl_easy_setopt(pCurl, CURLOPT_HTTPHEADER, plist);
 
@@ -370,7 +367,7 @@ string codeHelper::mosCallbackRequest(const string &phone,
 
     if (NULL != pCurl)
     {
-        // 设置超时时间为1秒
+        // 设置超时时间�?1�?
         curl_easy_setopt(pCurl, CURLOPT_TIMEOUT, 1);
 
         // First set the URL that is about to receive our POST.
@@ -378,7 +375,7 @@ string codeHelper::mosCallbackRequest(const string &phone,
         // https:// URL if that is what should receive the data.
         // curl_easy_setopt(pCurl, CURLOPT_URL, mosUrl.c_str());
 
-        // 设置http发送的内容类型为JSON
+        // 设置http发送的内�?�类型为JSON
         curl_slist *plist = curl_slist_append(NULL, "Content-Type:application/json;charset=UTF-8");
         curl_slist_append(plist, "Authorization:Z2RlbXM6MzcwMWJmNjM4NjA5ZjM0ZDc4OGMxZDM1ZGNkOTE4ZmQ=");
         curl_slist_append(plist, "Accept:application/json");
@@ -401,28 +398,28 @@ string codeHelper::mosCallbackRequest(const string &phone,
 
 RETURN_CODE codeHelper::fill_config(struct tts_config *config, const char *txt)
 {
-    // 填写网页上申请的appkey 如 g_api_key="g8eBUMSokVB1BHGmgxxxxxx"
+    // �?写网页上申�?�的appkey �? g_api_key="g8eBUMSokVB1BHGmgxxxxxx"
     char api_key[] = "4E1BG9lTnlSeIf1NQFlrSq6h";
-    // 填写网页上申请的APP SECRET 如 $secretKey="94dc99566550d87f8fa8ece112xxxxx"
+    // �?写网页上申�?�的APP SECRET �? $secretKey="94dc99566550d87f8fa8ece112xxxxx"
     char secret_key[] = "544ca4657ba8002e3dea3ac2f5fdd241";
 
-    // text 的内容为"欢迎使用百度语音合成"的urlencode,utf-8 编码
-    // 可以百度搜索"urlencode"
-    // char text[2000] = "欢迎使用百度语音";
+    // text 的内容为"欢迎使用百度�?音合�?"的urlencode,utf-8 编码
+    // �?以百度搜�?"urlencode"
+    // char text[2000] = "欢迎使用百度�?�?";
     char text[2000];
     strcpy(text, txt);
-    // 发音人选择, 0为普通女声，1为普通男生，3为情感合成-度逍遥，4为情感合成-度丫丫，默认为普通女声
+    // 发音人选择, 0为普通女声，1为普通男生，3为情感合�?-度逍遥�?4为情感合�?-度丫�?，默认为�?通女�?
     int per = 0;
-    // 语速，取值0-9，默认为5中语速
+    // �?速，取�?0-9，默认为5�?�?�?
     int spd = 5;
-    // #音调，取值0-9，默认为5中语调
+    // #音调，取�?0-9，默认为5�?�?�?
     int pit = 5;
-    // #音量，取值0-9，默认为5中音量
+    // #音量，取�?0-9，默认为5�?音量
     int vol = 5;
-    // 下载的文件格式, 3：mp3(default) 4： pcm-16k 5： pcm-8k 6. wav
+    // 下载的文件格�?, 3：mp3(default) 4�? pcm-16k 5�? pcm-8k 6. wav
     int aue = 6;
 
-    // 将上述参数填入config中
+    // 将上述参数填�?config�?
     snprintf(config->api_key, sizeof(config->api_key), "%s", api_key);
     snprintf(config->secret_key, sizeof(config->secret_key), "%s", secret_key);
     snprintf(config->text, sizeof(text), "%s", text);
@@ -444,10 +441,10 @@ RETURN_CODE codeHelper::fill_config(struct tts_config *config, const char *txt)
 RETURN_CODE codeHelper::run_tts(struct tts_config *config, const char *token, const char *fileName)
 {
     char params[200 + config->text_len * 9];
-    CURL *curl = curl_easy_init();                                           // 需要释放
-    char *cuid = curl_easy_escape(curl, config->cuid, strlen(config->cuid)); // 需要释放
-    char *textemp = curl_easy_escape(curl, config->text, config->text_len);  // 需要释放
-    char *tex = curl_easy_escape(curl, textemp, strlen(textemp));            // 需要释放
+    CURL *curl = curl_easy_init();                                           // 需要释�?
+    char *cuid = curl_easy_escape(curl, config->cuid, strlen(config->cuid)); // 需要释�?
+    char *textemp = curl_easy_escape(curl, config->text, config->text_len);  // 需要释�?
+    char *tex = curl_easy_escape(curl, textemp, strlen(textemp));            // 需要释�?
     curl_free(textemp);
     char params_pattern[] = "ctp=1&lan=zh&cuid=%s&tok=%s&tex=%s&per=%d&spd=%d&pit=%d&vol=%d&aue=%d";
     snprintf(params, sizeof(params), params_pattern, cuid, token, tex,
@@ -466,10 +463,10 @@ RETURN_CODE codeHelper::run_tts(struct tts_config *config, const char *token, co
     char file[360];
     strcpy(file, fileName);
     struct http_result result = {1, config->format, NULL, file};
-    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback); // 检查头部
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback); // 检查头�?
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, &result);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc_data);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result); // 需要释放
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result); // 需要释�?
     curl_easy_setopt(curl, CURLOPT_VERBOSE, ENABLE_CURL_VERBOSE);
     CURLcode res_curl = curl_easy_perform(curl);
 
@@ -566,38 +563,15 @@ int codeHelper::UnicodeToUTF_8(unsigned long *InPutStr, int InPutStrLen, char *O
     }
     return offset;
 }
-int code_convert(char *from_charset, char *to_charset, char *inbuf, size_t inlen, char *outbuf, size_t outlen)
-{
-    iconv_t cd;
-    char **pin = &inbuf;
-    char **pout = &outbuf;
 
-    cd = iconv_open(to_charset, from_charset);
-    if (cd == 0)
-        return -1;
-    memset(outbuf, 0, outlen);
-    if (iconv(cd, pin, &inlen, pout, &outlen) == -1)
-        return -1;
-    iconv_close(cd);
-    *pout = '\0';
 
-    return 0;
-}
 
-int g2u(char *inbuf, size_t inlen, char *outbuf, size_t outlen)
-{
-    return code_convert("gb2312", "utf-8", inbuf, inlen, outbuf, outlen);
-}
-int u2g(char *inbuf, size_t inlen, char *outbuf, size_t outlen)
-{
-    return code_convert("utf-8", "gb2312", inbuf, inlen, outbuf, outlen);
-}
 
 /****************************************************************************** 
     * function: gbk2utf8 
-    * description: 实现由gbk编码到utf8编码的转换  
+    * description: 实现由gbk编码到utf8编码的转�?  
     *  
-    * input: utfstr,转换后的字符串;  srcstr,待转换的字符串; maxutfstrlen, utfstr的最大长度 
+    * input: utfstr,�?换后的字符串;  srcstr,待转换的字�?�串; maxutfstrlen, utfstr的最大长度�?
     * output: utfstr 
     * returns: -1,fail;>0,success 
     *  
@@ -610,8 +584,8 @@ int gbk2utf8(char *utfstr, const char *srcstr, int maxutfstrlen)
         printf(" bad parameter\n");
         return -1;
     }
-    //首先先将gbk编码转换为unicode编码
-    if (NULL == setlocale(LC_ALL, "zh_CN.gbk")) //设置转换为unicode前的码,当前为gbk编码
+    //首先先将gbk编码�?�?为unicode编码
+    if (NULL == setlocale(LC_ALL, "zh_CN.gbk")) //设置�?�?为unicode前的�?,当前为gbk编码
     {
         printf("setlocale bad parameter\n");
         return -1;
@@ -622,35 +596,35 @@ int gbk2utf8(char *utfstr, const char *srcstr, int maxutfstrlen)
 
     int unicodelen = ws.length();
 
-    // int unicodelen = mbstowcs(wc, srcstr, 0); //计算转换后的长度  
+    // int unicodelen = mbstowcs(wc, srcstr, 0); //计算�?换后的长�?  
     // if (unicodelen <= 0)
     // {
     //     printf("can not transfer!!!\n");
     //     return -1;
     // }
     wchar_t *unicodestr = (wchar_t *)calloc(sizeof(wchar_t), unicodelen + 1);
-    mbstowcs(unicodestr, srcstr, strlen(srcstr)); //将gbk转换为unicode  
+    mbstowcs(unicodestr, srcstr, strlen(srcstr)); //将gbk�?�?为unicode  
 
-    //将unicode编码转换为utf8编码
+    //将unicode编码�?�?为utf8编码
 
     if (NULL == setlocale(LC_ALL, "zh_CN.utf8"))
     {
         printf("bad parameter\n");
         return -1;
     }
-    int utflen = wcstombs(NULL, unicodestr, 0); //计算转换后的长度  
+    int utflen = wcstombs(NULL, unicodestr, 0); //计算�?换后的长�?  
     if (utflen <= 0)
     {
         printf("can not transfer!!!\n");
         return -1;
     }
-    else if (utflen >= maxutfstrlen) //判断空间是否足够  
+    else if (utflen >= maxutfstrlen) //判断空间�?否足�?  
     {
         printf("dst str memory not enough\n");
         return -1;
     }
     wcstombs(utfstr, unicodestr, utflen);
-    utfstr[utflen] = 0; //添加结束符  
+    utfstr[utflen] = 0; //添加结束�?  
 
     free(unicodestr);
     return utflen;
@@ -664,20 +638,20 @@ char *codeHelper::simnet(const char *text1, const char *text2)
 
     // std::string text_2 = "万事通自考网";
 
-    // // 调用短文本相似度
+    // // 调用�?文本相似�?
     // result = client.simnet(text_1, text_2, aip::null);
 
-    // // 如果有可选参数
+    // // 如果有可选参�?
     // std::map<std::string, std::string> options;
     // options["model"] = "CNN";
 
-    // // 带参数调用短文本相似度
+    // // 带参数调用短文本相似�?
     // result = client.simnet(text_1, text_2, options);
     // printf("%s\n",result.)
 
     // string response;
     // int code = this->get_access_token(response, "7ZM7qRbFdrBF701okoSXyY5L", "uEAf5uIe0H3NDeDlA2HKe6BKalh65G4s");
-    // // wstring t1=String2WString("编码转换器中国人");
+    // // wstring t1=String2WString("编码�?换器�?国人");
     // // char buf1[4000];
     // // UnicodeToUTF_8((unsigned long*)((void*)t1.c_str()),t1.length(),buf1);
     // char utf[600] = {0};
@@ -690,7 +664,7 @@ char *codeHelper::simnet(const char *text1, const char *text2)
     // g2u(str, strlen(str), utf2, sizeof utf2);
     //  printf("gb2312-->unicode out=%sn",utf2);
 
-    // string json = createSimnetBody(str, "是的");
+    // string json = createSimnetBody(str, "�?�?");
 
     // CURL *pCurl = NULL;
     // CURLcode res;
@@ -704,7 +678,7 @@ char *codeHelper::simnet(const char *text1, const char *text2)
 
     // if (NULL != pCurl)
     // {
-    //     // 设置超时时间为1秒
+    //     // 设置超时时间�?1�?
     //     curl_easy_setopt(pCurl, CURLOPT_TIMEOUT, 1);
 
     //     // First set the URL that is about to receive our POST.
@@ -713,7 +687,7 @@ char *codeHelper::simnet(const char *text1, const char *text2)
     //     string url = "https://aip.baidubce.com/rpc/2.0/nlp/v2/simnet?access_token=24.8fa7658cfd43f55660f17223453704c9.2592000.1549091325.282335-15325512";
     //     curl_easy_setopt(pCurl, CURLOPT_URL, url.c_str());
 
-    //     // 设置http发送的内容类型为JSON
+    //     // 设置http发送的内�?�类型为JSON
     //     curl_slist *plist = curl_slist_append(NULL, "Content-Type:application/json;charset=UTF-8");
 
     //     curl_easy_setopt(pCurl, CURLOPT_HTTPHEADER, plist);
@@ -812,12 +786,12 @@ void codeHelper::getKeyWord(multimap<int, string> &keyWord, const string &word)
 
 /*******************************************************
     函数名称：UTF2Uni
-    函数功能：utf-8转Unicode（跨平台）
-    输入参数：
-        src：utf-8编码格式的字符指针
-        t：Unicode编码格式的宽字符串
+    函数功能：utf-8转Unicode（跨平台�?
+    输入参数�?
+        src：utf-8编码格式的字符指�?
+        t：Unicode编码格式的�?�字符串
     输出参数：无
-    返 回 值：0表示执行成功
+    �? �? 值：0表示执�?�成�?
 *******************************************************/
 int codeHelper::UTF2Uni(const char *src, std::wstring &t)
 {
@@ -831,7 +805,7 @@ int codeHelper::UTF2Uni(const char *src, std::wstring &t)
     memset(des, 0, size_d * sizeof(wchar_t));
 
     int s = 0, d = 0;
-    //设为true时，跳过错误前缀
+    //设为true时，跳过错�??前缀
     bool toomuchbyte = true;
 
     while (s < size_s && d < size_d)
@@ -892,11 +866,11 @@ int codeHelper::UTF2Uni(const char *src, std::wstring &t)
 
 /*******************************************************
     函数名称：ws2s
-    函数功能：wstring转string（跨平台），不涉及编码格式的转换
-    输入参数：
+    函数功能：wstring转string（跨平台），不涉及编码格式的�?�?
+    输入参数�?
         ws：Unicode编码格式的wstring
     输出参数：无
-    返 回 值：Unicode编码格式的string
+    �? �? 值：Unicode编码格式的string
 *******************************************************/
 std::string codeHelper::ws2s(const std::wstring &ws)
 {
@@ -922,7 +896,7 @@ std::string codeHelper::ws2s(const std::wstring &ws)
 /************************************************************************/
 codeHelper *codeHelper::GetInstance()
 {
-    if (m_pInstance == NULL) //判断是否第一次调用
+    if (m_pInstance == NULL) //判断�?否�??一次调�?
         m_pInstance = new codeHelper();
     return m_pInstance;
 }

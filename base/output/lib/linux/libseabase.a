@@ -1,0 +1,1982 @@
+!<arch>
+//                                              70        `
+xDemultiplexerSelect.cpp/
+xEventDemultiplexer.cpp/
+xEthreadpool.cpp/
+
+xtimeheap.cpp/  1553310996  0     0     100755  2406      `
+#include "xtimeheap.h"
+using namespace SEABASE;
+void xtime_heap::percolate_down(int hole)
+{
+	xheaptimer* temp = array[hole];
+	int child=0;
+	for(;((hole*2+1)<=(m_cur_size-1));hole=child)
+	{
+		child=hole*2+1;
+		if(child<(m_cur_size-1)&& (array[child+1]->expire < array[child]->expire))
+		{
+			child++; //子节点中较小的元素
+		}
+		if(array[child]->expire < temp->expire)
+		{
+			array[hole] = array[child]; //如果较小的子节点小于根节点，则上旋。
+		}
+		else
+		{
+			break;
+		}
+		//array[hole] = temp;
+
+	}
+	array[hole] = temp;// 在做小根对调整时，最后赋值。
+}
+void xtime_heap::resize() throw (std::exception)
+{
+	xheaptimer**temp = new xheaptimer*[2*m_capacity];
+	for(int i=0;i<2*m_capacity;++i)
+	{
+		temp[i]=NULL;
+	}
+	if(!temp)throw std::exception();
+	int temp_cap=2*m_capacity;
+	for (int i=0;i<m_cur_size;++i)
+	{
+		temp[i] = array[i];
+	}
+	delete [] array;
+	array=temp;
+}
+void xtime_heap::add_timer(xheaptimer*timer)throw(std::exception)
+{
+	if(!timer)
+	{
+		return ;
+	}
+	if(m_cur_size >= m_capacity)
+	{
+		resize();
+	}
+	int hole=m_cur_size++;
+	int parent=0;
+	//将新加入的元素放在最后面，然后上旋调整。
+	for(;hole>0;hole=parent)
+	{
+		parent = (hole-1)/2;
+		if(array[parent]->expire <= timer->expire)
+		{
+			break;
+		}
+		array[hole]=array[parent];
+	}
+	array[hole]=timer;
+}
+void xtime_heap::del_timer(xheaptimer* timer)
+{
+	if(!timer)
+	{
+		return;
+	}
+	//这里将定时器的相应接口给置为空，还没有从队列删除
+	timer->cb_func = NULL;
+	//pop_timer()
+}
+xheaptimer * xtime_heap::top()const 
+{
+	if(empty())
+		return NULL;
+	return array[0];
+}
+void xtime_heap::pop_timer()
+{
+	if(empty())
+		return;
+	if(array[0])
+	{
+		//将最后面的元素放在第一位，然后向下调整小根堆
+		//delete array[0];
+		//在出队列的时候，直接将指针指向别的地方，不做删除。如果是对象，则结束自动释放
+		//如果是new的内存，由外部释放。
+		array[0]=array[--m_cur_size];
+		percolate_down(0);
+		array[m_cur_size]=NULL;
+	}
+}
+void xtime_heap::tick()
+{
+	xheaptimer* temp=array[0];
+	time_t cur = time(NULL);
+	while(!empty())
+	{
+		if(!temp)
+		{
+			break;
+		}
+		if(temp->expire >cur)
+			break;
+		if(array[0]->cb_func)
+		{
+			array[0]->cb_func(array[0]->user_data);
+		}
+		pop_timer();
+		temp=array[0];
+	}
+}xTimeuil.cpp/   1555735464  0     0     100755  9299      `
+#include "xTimeuil.h"
+#include <iostream>
+#include "xStringuil.h"
+namespace SEABASE
+{
+
+    static struct tm* localtime_r(const time_t* timep, struct tm* result = NULL) {
+#ifdef WIN32
+        (void)result;
+        return localtime(timep);
+#else
+        return ::localtime_r(timep, result);
+#endif
+    }
+
+#ifdef _WIN32
+    //gettimeofday ������http://suacommunity.com/dictionary/gettimeofday-entry.php
+    FILETIME xTimeUtil::_ft = {0};
+	LARGE_INTEGER xTimeUtil::_pform = {0};
+#endif
+	  
+    int32_t xTimeUtil::gettimeofday(struct ::timeval *tv, struct timezone *tz)
+    {
+#ifndef _WIN32
+        return ::gettimeofday(tv,tz);
+#else
+        FILETIME ft;
+
+        unsigned __int64 tmpres = 0;
+        unsigned __int64 tmpres2 = 0;
+        static int tzflag = 0;
+        LARGE_INTEGER pform={0};
+        QueryPerformanceCounter(&pform);
+
+        if (NULL != tv)
+        {
+            GetSystemTimeAsFileTime(&ft);
+            if(ft.dwLowDateTime == _ft.dwLowDateTime && ft.dwHighDateTime == _ft.dwHighDateTime)
+            {
+                //ʱ�����ʱ������ʱ��ƫ��
+                LARGE_INTEGER pfreq = {0};
+                QueryPerformanceFrequency(&pfreq);
+                tmpres2 = ((pform.QuadPart - _pform.QuadPart) * 1000000UL)/pfreq.QuadPart;
+            }
+            else
+            {
+                //ʱ�䲻��ʱ�����±�׼ʱ��
+                xTimeUtil::_ft = ft;
+                QueryPerformanceCounter(&_pform);
+            }
+
+            tmpres |= ft.dwHighDateTime;
+            tmpres <<= 32;
+            tmpres |= ft.dwLowDateTime;
+
+            tmpres /= 10;
+            tmpres -= DELTA_EPOCH_IN_MICROSECS;
+			tmpres += tmpres2;	//��������ƫ��
+
+
+            tv->tv_sec = (long)(tmpres / 1000000UL);
+            tv->tv_usec = (long)(tmpres % 1000000UL);
+        }
+
+        if (NULL != tz)
+        {
+            if (!tzflag)
+            {
+                _tzset();
+                tzflag++;
+            }
+
+            tz->tz_minuteswest = _timezone / 60;
+            tz->tz_dsttime = _daylight;
+        }
+
+        return 0;
+#endif
+    }
+
+    uint64_t xTimeUtil::get_timestamp_s() {
+        struct ::timeval tv = {0, 0};
+		gettimeofday(&tv, NULL);
+        return tv.tv_sec;
+    }
+
+    uint64_t xTimeUtil::get_timestamp_ms() {
+        struct ::timeval tv = {0, 0};
+        gettimeofday(&tv, NULL);
+        return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    }
+
+    uint64_t xTimeUtil::get_timestamp_us() {
+        struct ::timeval tv = {0, 0};
+        gettimeofday(&tv, NULL);
+        return (uint64_t)tv.tv_sec * 1000000 + tv.tv_usec;
+    }
+
+    void xTimeUtil::safe_sleep_s(uint32_t second) {
+#ifdef _WIN32
+        return xTimeUtil::safe_sleep_ms(second * 1000);
+#else
+        struct timespec interval, remainder;
+        int32_t ret;
+
+        interval.tv_sec = second;
+        interval.tv_nsec = 0;
+
+        ret = nanosleep(&interval, &remainder);
+        if (-1 == ret) {
+            while (EINTR == errno && -1 == ret) {
+                ret = nanosleep(&remainder, &remainder);
+            }
+        }
+#endif
+    }
+
+    void xTimeUtil::safe_sleep_ms(uint32_t millisecond) {
+#ifdef _WIN32
+        ::Sleep(millisecond);
+#else
+        struct timespec interval, remainder;
+        int32_t ret;
+
+        interval.tv_sec = millisecond / 1000U;
+        interval.tv_nsec = (uint64_t)millisecond % 1000UL * 1000UL * 1000UL;
+
+        ret = nanosleep(&interval, &remainder);
+        if (-1 == ret) {
+            while (EINTR == errno && -1 == ret) {
+                ret = nanosleep(&remainder, &remainder);
+            }
+        }
+#endif
+    }
+
+    std::string xTimeUtil::format_datetime_str(uint64_t millisecond) {
+        time_t time = (time_t)(millisecond / 1000);
+        struct tm t;
+        struct tm *pt = NULL;
+        char buffer[24] = {0};
+
+        pt = SEABASE::localtime_r(&time, &t);
+        if(NULL != pt)
+        {
+            t = *pt;
+            snprintf(buffer, 24, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+                t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, (int32_t)(millisecond % 1000));
+        }
+        return std::string(buffer);
+    }
+
+#ifndef _WIN32
+    int32_t xTimeUtil::get_abs_timespec(struct timespec* ts, int32_t millisecond) {
+        struct timeval tv;
+        int32_t ret;
+
+        if (NULL == ts) {
+            return EINVAL;
+        }
+
+        ret = gettimeofday(&tv, NULL);
+        if (0 != ret) {
+            return ret;
+        }
+
+        ts->tv_sec = tv.tv_sec;
+        ts->tv_nsec = tv.tv_usec * 1000UL;
+
+        ts->tv_sec += millisecond / 1000UL;
+        ts->tv_nsec += millisecond % 1000UL * 1000000UL;
+
+        ts->tv_sec += ts->tv_nsec/(1000UL * 1000UL *1000UL);
+        ts->tv_nsec %= (1000UL * 1000UL *1000UL);
+
+        return 0;
+    }
+#endif
+
+    int32_t xTimeUtil::strftimeval(char* buffer, int32_t buflen, const struct timeval* tv) {
+        if (NULL == buffer || NULL == tv) {
+            return -1;
+        }
+
+        time_t time = tv->tv_sec;
+        struct tm t;
+        struct tm *pt = NULL;
+
+        pt = SEABASE::localtime_r(&time, &t);
+        if(NULL == pt)
+        {
+            return -1;
+        }
+        t = *pt;
+        return snprintf(buffer, buflen, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+                t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, (int32_t)tv->tv_usec / 1000);   
+    }
+
+    std::string xTimeUtil::get_date() {
+        time_t t = time(NULL);
+        struct tm result;
+        struct tm *presult = NULL;
+        char buffer[20] = {0};
+        presult = SEABASE::localtime_r(&t, &result);
+        if(NULL != presult)
+        {
+            result = *presult;
+            strftime(buffer, 20, "%Y%m%d", &result);
+        }
+
+        return std::string(buffer);
+    }
+
+    std::string xTimeUtil::get_time() {
+        time_t t = time(NULL);
+        struct tm result;
+        struct tm *presult = NULL;
+        char buffer[20] = {0};
+        presult = SEABASE::localtime_r(&t, &result);
+        if(NULL != presult)
+        {
+            result = *presult;
+            strftime(buffer, 20, "%H%M%S", &result);
+        }
+
+        return std::string(buffer);
+    }
+    
+    int32_t xTimeUtil::get_day()
+    {
+        time_t t = time(NULL);
+        struct tm result;
+        struct tm *presult = NULL;
+        presult = SEABASE::localtime_r(&t, &result);
+        if(NULL == presult)
+        {
+            return -1;
+        }
+        result = *presult;
+        return result.tm_wday;
+    }
+
+    int32_t xTimeUtil::get_day( time_t time )
+    {
+        struct tm result;
+        struct tm *presult = NULL;
+        presult = SEABASE::localtime_r(&time, &result);
+        if(NULL == presult)
+        {
+            return -1;
+        }
+        result = *presult;
+        return result.tm_wday;
+    }
+
+    std::string xTimeUtil::format_time(const char * fmt)
+    {
+        //��ȡʱ��
+        struct ::timeval tv = {0, 0};
+        gettimeofday(&tv, NULL);
+        
+        return format_time(&tv, fmt);
+    }
+    
+    std::string xTimeUtil::format_time(time_t time, const char * fmt)
+    {
+        struct ::timeval tv = {0, 0};
+        tv.tv_sec = static_cast <long>(time);
+
+        return format_time(&tv, fmt);
+    }
+
+    std::string xTimeUtil::format_time(const struct timeval* tv, const char * fmt)
+    {
+        struct tm result;
+        struct tm  *presult = NULL;
+        time_t t = tv->tv_sec;
+        char buffer[50] = {0};
+        char tmp[8];
+        if(NULL == fmt)
+        {
+            //��ʽ����ǰʱ��
+            presult = SEABASE::localtime_r(&t, &result);
+            if(NULL != presult)
+            {
+                result = *presult;
+                strftime(buffer, sizeof(buffer), "%Y%m%d-%H:%M:%S", &result);
+            }
+        }
+        else
+        {
+            std::string str_fmt(fmt);
+            std::string str_tmp;
+            if(std::string::npos != str_fmt.find("[m]"))
+            {
+                //�滻����ʱ��
+                snprintf(tmp,8,"%03d", (int)(tv->tv_usec / 1000) );
+                str_tmp.assign(tmp);
+                str_fmt = xStringUtil::replace_string(str_fmt, "[m]", str_tmp);
+            }
+            if(std::string::npos != str_fmt.find("[u]"))
+            {
+                //�滻΢��ʱ��
+                snprintf(tmp,8,"%06d", (int)(tv->tv_usec) );
+                str_tmp.assign(tmp);
+                str_fmt = xStringUtil::replace_string(str_fmt, "[u]", str_tmp);
+            }
+            if(std::string::npos != str_fmt.find("[U]"))
+            {
+                //�滻΢��ʱ��
+                snprintf(tmp,8,"%03d", (int)(tv->tv_usec % 1000) );
+                str_tmp.assign(tmp);
+                str_fmt = xStringUtil::replace_string(str_fmt, "[U]", str_tmp);
+            }
+            presult = SEABASE::localtime_r(&t, &result);
+            if(NULL != presult)
+            {
+                result = *presult;
+                strftime(buffer, sizeof(buffer), str_fmt.c_str(), &result);
+            }
+        }
+        return std::string(buffer);
+    }
+}
+
+
+/0              1555735702  0     0     100755  1791      `
+//xjshi 2019/3/13
+//�ع�hpp
+#include"xDemultiplexerSelect.h"
+using namespace SEABASE;
+
+//select
+#ifdef WIN32
+xSelectDemultiplexer::xSelectDemultiplexer()
+{
+	m_fd_num=0;
+	FD_ZERO(&m_fdReadSave);
+}
+xSelectDemultiplexer::~xSelectDemultiplexer()
+{
+
+}
+
+int xSelectDemultiplexer::WaitEvents(int timeout,xtime_heap* event_timer )
+{
+	//std::vector<handle_t> m_Readevents;
+	fd_set fdread;
+	FD_ZERO(&fdread);
+	memcpy(&fdread,&m_fdReadSave,sizeof(m_fdReadSave));
+	timeval timev_;
+	timev_.tv_sec=timeout/1000;
+	timev_.tv_usec=0;
+	int res = select( 0,  &fdread , NULL,NULL, &timev_);
+	if(res>0)
+	{
+
+		for(int j=0;j<m_fdReadSave.fd_count;j++)
+		{
+			int fd=m_fdReadSave.fd_array[j];
+			if(FD_ISSET(fd,&fdread))
+			{
+				//m_handlers[fd]->HandleRead(fd,this);
+				if(m_handlers[fd].m_readptr)
+				{
+					m_handlers[fd].m_readptr(fd,this,(void*)m_handlers[fd].m_readarg);
+				}
+			}
+		}
+
+	}
+	if(event_timer !=NULL)
+	{
+		event_timer->tick();
+	}
+	return 0;
+}
+int xSelectDemultiplexer::RequestEvent(xEvent_t &e)
+{
+	int handle = e.m_Eventfd;
+	std::map<handle_t,xEvent_t>::iterator it = m_handlers.find(handle);
+	if(it==m_handlers.end())
+	{
+		m_handlers[handle]=e;
+	}
+	FD_SET((SOCKET)handle,&m_fdReadSave);
+	if((int)handle > m_maxfdID)
+		m_maxfdID = (int)handle +1;
+	++m_fd_num;
+	// 	if(evt & xWriteEvent)
+	// 		FD_SET(handle,&m_fdread);
+	// 	if(evt &xErrorEvent)
+	// 		FD_SET(handle,&m_fdError);
+	return 0;
+}
+int xSelectDemultiplexer::UnrequestEvent(SEABASE::handle_t handle)
+{
+	if((SOCKET)handle!=INVALID_SOCKET)
+	{
+		FD_CLR((SOCKET)handle,&m_fdReadSave);
+		--m_fd_num;
+		std::map<handle_t,xEvent_t>::iterator it = m_handlers.find(handle);
+		if(it!=m_handlers.end())
+		{
+			m_handlers.erase(handle);
+		}
+	}
+	return 0;
+}
+
+#endif
+xStringuil.cpp/ 1555729391  0     0     100755  9226      `
+/***********************************************************************
+  * Copyright (c) 2012, Baidu Inc. All rights reserved.
+  * 
+  * Licensed under the BSD License
+  * you may not use this file except in compliance with the License.
+  * You may obtain a copy of the License at
+  * 
+  *      license.txt
+  *********************************************************************/
+
+#include <ctype.h>
+#ifdef _WIN32
+#define _CRT_RAND_S
+#include <objbase.h>
+#endif
+#include <iostream>
+#include <algorithm>
+
+#include "xTimeuil.h"
+#include "xStringuil.h"
+/*#include "guard.h"*/
+
+namespace SEABASE {
+
+    void xStringUtil::toupper_inplace(char* str) {
+        if (NULL == str) {
+            return;
+        }
+
+        while ('\0' != *str) {
+            *str = ::toupper(*str);
+            ++str;
+        }
+    }
+
+    std::string xStringUtil::toupper(const char* str) {
+        if (NULL == str) {
+            return "";
+        }
+
+        std::string tmp(str);
+        std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::toupper);
+        return tmp;
+    }
+
+    std::string xStringUtil::toupper(const std::string& str) {
+        return xStringUtil::toupper(str.c_str());
+    }
+
+    void xStringUtil::tolower_inplace(char* str) {
+        if (NULL == str) {
+            return;
+        }
+
+        while ('\0' != *str) {
+            //note ����tolowerǰ��::����ʡ��
+            *str = ::tolower(*str);
+            ++str;
+        }
+    }
+
+    std::string xStringUtil::tolower(const char* str) {
+        if (NULL == str) {
+            return "";
+        }
+
+        std::string tmp(str);
+        //note ����tolowerǰ��::����ʡ��
+        std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+        return tmp;
+    }
+	
+    std::string xStringUtil::tolower(const std::string& str) {
+        return xStringUtil::tolower(str.c_str());
+    }
+
+    void xStringUtil::ltrim_inplace(char* str) {
+        if (NULL == str) {
+            return;
+        }
+
+        char *pc = str;
+        while (::isspace(*pc)) {
+            ++pc;
+        }
+
+        if (pc != str) {
+            while ((*str++ = *pc++)) {
+            }
+        }
+    }
+
+    std::string xStringUtil::ltrim(const char* str) {
+        if (NULL == str) {
+            return "";
+        }
+
+        const char *pc = str;
+        while (::isspace(*pc)) {
+            ++pc;
+        }
+
+        return std::string(pc);
+    }
+
+    std::string xStringUtil::ltrim(const std::string& str) {
+        return xStringUtil::ltrim(str.c_str());
+    }
+
+    void xStringUtil::rtrim_inplace(char* str) {
+        if (NULL == str) {
+            return;
+        }
+
+        char *tail = str + strlen(str) - 1;
+        while (tail >= str && ::isspace(*tail)) {
+            *tail-- = '\0';
+        }
+    }
+
+    std::string xStringUtil::rtrim(const char* str, int32_t len) {
+        if (NULL == str || len <= 0) {
+            return "";
+        }
+
+        const char* head = str;
+        const char* tail = head + len - 1;
+
+        while (tail >= head && ::isspace(*tail)) {
+            --tail;
+        }
+
+        if (tail >= head) {
+            return std::string(head, tail - head + 1); 
+        }
+        else {
+            return "";
+        }
+    }
+
+    std::string xStringUtil::rtrim(const char* str) {
+        if (NULL == str) {
+            return "";
+        }
+        else {
+            return xStringUtil::rtrim(str, (int32_t)strlen(str));
+        }
+    }
+
+    std::string xStringUtil::rtrim(const std::string& str) {
+        return xStringUtil::rtrim(str.c_str(), (int32_t)str.size());
+    }
+
+    void xStringUtil::trim_inplace(char* str) {
+        xStringUtil::ltrim_inplace(str);
+        xStringUtil::rtrim_inplace(str);
+    }
+
+    std::string xStringUtil::trim(const char* str) {
+        return xStringUtil::rtrim(xStringUtil::ltrim(str));
+    }
+
+    std::string xStringUtil::trim(const std::string& str) {
+        return xStringUtil::rtrim(xStringUtil::ltrim(str));
+    }
+
+    void xStringUtil::split_string(const std::string& str, const std::string& separator,
+            std::vector<std::string>& container, bool filter_empty) {
+        std::string::size_type pos;
+        std::string::size_type lastPos = 0;
+
+        container.clear();
+
+        while (true) {
+            pos = str.find_first_of(separator, lastPos);
+            if (pos == std::string::npos) {
+                pos = str.length();
+
+                if(pos != lastPos || false == filter_empty) {
+                    container.push_back(std::string(str.data() + lastPos, pos - lastPos));
+                }
+
+                break;
+            }
+            else {
+                if(pos != lastPos || false == filter_empty) {
+                    container.push_back(std::string(str.data() + lastPos, pos - lastPos));
+                }
+            }
+
+            lastPos = pos + 1;
+        }
+    }
+
+    std::string xStringUtil::replace_string(const std::string& str, const std::string& target,
+            const std::string& replacement) {
+        std::string ret;
+        std::string::size_type target_len = target.length();
+
+        if (0 == target_len) {
+            return str;
+        }
+
+        std::string::size_type pos_begin = 0;
+        std::string::size_type pos_target = str.find(target, pos_begin);
+        const char *str_head = str.data();
+
+        while (pos_target != std::string::npos) {
+            ret.append(str_head + pos_begin, pos_target - pos_begin);
+            ret += replacement;
+            pos_begin = pos_target + target_len;
+            pos_target = str.find(target, pos_begin);
+        }
+
+        if (pos_begin < str.length()) {
+            ret.append(str.begin() + pos_begin, str.end());
+        }
+        return ret;
+    }
+    bool xStringUtil::str2uint32(const char* str, uint32_t& number) {
+#ifdef _WIN32
+
+        std::string trimed = xStringUtil::ltrim(str);
+        if (0 < trimed.length() && trimed.at(0) == '-') {
+            return false;
+        }
+#endif
+        return xStringUtil::str2integer(str, number);
+    }
+
+    bool xStringUtil::str2int32(const char* str, int32_t& number) {
+        return xStringUtil::str2integer(str, number);
+    }
+
+    bool xStringUtil::str2uint64(const char* str, uint64_t& number) {
+#ifdef _WIN32
+        std::string trimed = xStringUtil::ltrim(str);
+        if (0 < trimed.length() && trimed.at(0) == '-') {
+            return false;
+        }
+#endif
+        return xStringUtil::str2integer(str, number);
+    }
+
+    bool xStringUtil::str2int64(const char* str, int64_t& number) {
+        return xStringUtil::str2integer(str, number);
+    }
+
+    std::string xStringUtil::generate_uuid() {
+        char uuid[40] = {0};
+#ifdef _WIN32
+        GUID guid;
+        CoCreateGuid(&guid);
+        snprintf( uuid,
+                sizeof(uuid),
+                "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X",
+                guid.Data1, guid.Data2, guid.Data3,
+                guid.Data4[0], guid.Data4[1],
+                guid.Data4[2], guid.Data4[3],
+                guid.Data4[4], guid.Data4[5],
+                guid.Data4[6], guid.Data4[7]);
+#else
+		xGuard<xEmutex> guard(&stMutex);
+        FILE* f = fopen("/proc/sys/kernel/random/uuid", "r");
+        if (f != NULL) {
+            fread(uuid, 1, 36, f);
+            fclose(f);
+        }
+        else {
+            return rand_string() + rand_string() + rand_string();
+        }
+#endif
+        return uuid;
+    }
+
+    bool xStringUtil::ipv4_ntoa(uint32_t src, std::string& dest) {
+        uint32_t a, b, c, d;
+        char buffer[16] = {0};
+
+        a = (src >> 24) & 0xff;
+        b = (src >> 16) & 0xff;
+        c = (src >> 8) & 0xff;
+        d = src & 0xff;
+
+        snprintf(buffer, 16, "%u.%u.%u.%u", a, b, c, d);
+
+        dest = buffer;
+        return true;
+    }
+
+    bool xStringUtil::ipv4_aton(const char* src, uint32_t& dest) {
+        if (NULL == src) {
+            return false;
+        }
+
+        uint32_t a, b, c, d;
+
+        if (4 != sscanf(src, "%u.%u.%u.%u", &a, &b, &c, &d)) {
+            return false;
+        }
+
+        if (a > 255 || b > 255 || c > 255 || d > 255) {
+            return false;
+        }
+
+        dest = 0;
+        dest |= a << 24;
+        dest |= b << 16;
+        dest |= c << 8;
+        dest |= d;
+        return true;
+    }
+
+    int32_t xStringUtil::xstrncpy(char* dest, const char* src, int32_t n) {
+        if (NULL == dest || NULL == src) {
+            return -1;
+        }
+
+        int32_t ncpy = 0;
+
+        while (*src && ncpy < n) {
+            *dest++ = *src++;
+            ++ncpy;
+        }
+        return ncpy;
+    }
+
+    std::string xStringUtil::rand_string() {
+        struct timeval tv;
+		xTimeUtil::gettimeofday(&tv, NULL);
+        uint32_t seed = tv.tv_usec;
+
+        std::stringstream ss;
+#ifdef _WIN32
+        srand( seed );
+        ss << rand();
+#else
+        ss << rand_r(&seed);
+#endif
+        std::string str;
+        ss >> str;
+        return str;
+    }
+
+	xEmutex xStringUtil::stMutex;
+}
+
+xthreadPool.cpp/1552805141  0     0     100755  2550      `
+#include "xthreadPool.h"
+using namespace SEABASE;
+bool xsimpleThreadPool::shutdown=false;
+xMutex xsimpleThreadPool::m_threadLock;
+xCondition xsimpleThreadPool::m_threadCond;
+std::deque<xtaskbase*> xsimpleThreadPool::m_taskList;
+#ifdef WIN32
+unsigned int __stdcall xsimpleThreadPool::threadproxy(void* arg)
+#else
+void*  __stdcall xsimpleThreadPool::threadproxy(void* arg)
+#endif
+{
+	pthread_t tid = pthread_self();
+	xThread* pthread=(xThread*)arg;
+	while(1)
+	{
+		xAutoLock L(m_threadLock);
+		while(m_taskList.size()==0&&!shutdown)
+		{
+			m_threadCond.wait(m_threadLock);
+		}
+		if(shutdown)
+		{
+			pthread->destory();
+			break;
+		}
+		xtaskbase* task=m_taskList.front();
+		m_taskList.pop_front();
+		task->run();
+	}
+	return 0;
+}
+
+
+void xthreadPool::initPool(size_t LowThreadNumber)
+{
+	if (UNINITIALIZED == m_state) {
+		m_state = INITIALIZED;}
+	m_threadNum=LowThreadNumber;
+}
+void xthreadPool::startPool(bool defaultpools )
+{
+	m_tasklist.setActive();// 设置任务队列为开启状态，否则添加和读取都会失败
+	//size_t threadnum = m_threadNum?m_threadNum:4
+	for(size_t i=0;i<m_threadNum;i++)
+	{
+		//xAutoLock L(m_lockForThread);
+		threadobj *thread=new threadobj;
+		//m_ThreadList.push_back(&thread);
+		thread->beginthreadobj(this);
+		m_ThreadList.push_back(thread);
+	}
+
+}
+bool xthreadPool::pushObj(xtaskbase*node,const struct timespec & Timeout)
+{
+	//if(m_boStartPool && isBusy())/
+	//这里有个讲究，不直接插入xtaskbase的子类对象，因为如果存对象，在插入的时候，会被强制转换成基类，丧失子类的部分
+	//如果存子类指针，在waitForTask 接口无法将指针作为传出参数，这样取不到该指针的地址。
+	//用pair<xtaskbase*，bool> 作为值类型，存入，这样取出的时候，可以将它的引用取出，这样，封装了多态问题，
+	//同时bool型变量也可用来以后拓展。
+	m_tasklist.pushTask(pair<xtaskbase*, bool>(node,false));
+	return true;
+}
+void xthreadPool::stopPool(bool defaultpools/*=true*/){
+	xAutoLock lock(m_lockForThread);
+	m_tasklist.setDeadstatus();
+	std::list<threadobj*>::iterator ite = m_ThreadList.begin();
+	while(ite!=m_ThreadList.end())
+	{
+		(*ite)->endthreadobj();
+		(*ite)->destory();
+		threadobj* pobj=*ite;
+		if(pobj)
+			delete pobj;
+		ite++;
+	}
+	m_tasklist.clearAllTask();
+}
+void xthreadPool::joinAllThread()
+{
+	std::list<threadobj*>::iterator ite = m_ThreadList.begin();
+	while(ite!=m_ThreadList.end())
+	{
+		(*ite)->join();
+		ite++;
+	}
+
+}xEtcpserver.cpp/1555602333  0     0     100755  987       `
+#include "xEtcpserver.h"
+using namespace SEABASE;
+
+int xEtcpListen::startlisten(const char*ip,int port)
+{
+	InitSocket();
+	m_listenFd = CreateSocket(SOCK_STREAM);
+	if(m_listenFd==INVALID_SOCKET)
+		return -1;
+	struct sockaddr_in addrsvr;
+	addrsvr.sin_family = AF_INET;
+	addrsvr.sin_port = htons(port);
+	addrsvr.sin_addr.s_addr = inet_addr(ip);
+	BindSocket(m_listenFd,(SOCKADDR*)&addrsvr,sizeof(addrsvr));
+	if(ListenSocket(m_listenFd,10)==INVALID_SOCKET)
+		return -1;
+	return m_listenFd;
+}
+xtcpserver::xtcpserver():m_tcpreactor(NULL)
+{
+
+}
+xtcpserver::~xtcpserver()
+{
+
+}
+int xEtcpListen::stoplisten()
+{
+	return CloseSocket(m_listenFd);
+}
+int xEtcpListen::getSockfd()
+{
+	return m_listenFd;
+}
+
+int xtcpserver::startTcpSvr(const char*ip,int port)
+{
+
+	int listenfd = m_tcplistener.startlisten(ip,port);
+	//m_tcpreactor = reactor;
+	//m_tcpreactor->Register
+	return listenfd;
+}
+int xtcpserver::stopTcpSvr()
+{
+	m_tcplistener.stoplisten();
+	return 0;
+}
+xNetdata.cpp/   1555730480  0     0     100755  1826      `
+#include "xNetdata.h"
+using namespace SEABASE;
+
+void Eventcallback::InitEvent(xEvent_t& e, SOCKET sock, void *arg,pcallbackptr func)
+{
+	e.m_Eventfd=sock;
+	e.m_eventmask=xReadEvent|xErrorEvent;
+	e.m_readptr = func;
+	e.m_readarg = arg;
+	e.m_writearg=arg;
+	//e.m_writeptr=
+	e.m_errorptr=ErrCallback;
+	e.m_errorarg=arg;
+}
+void Eventcallback::AcceptCallback(int sockfd,xEventDemultiplexer*Demultiplexer,void *arg)
+{
+	struct sockaddr_in clientaddr;
+	socklen_t socklen=sizeof(struct sockaddr_in);
+	int acceptfd=AccpetSocket(sockfd,(SOCKADDR*)&clientaddr,&socklen);
+	if((SOCKET)acceptfd==INVALID_SOCKET)
+		return ;
+	xReceivebackbase * pclientEvent=NULL;
+	xItcpserver*pserver = (xItcpserver*)arg;
+	if(!pserver)	return ;
+	pserver->Onaccept(acceptfd,NULL,0,(xReceivebackbase**)&pclientEvent);
+	//m_Eventfd=acceptfd;
+	if(pclientEvent)  //����ע��accept��fd,
+	{
+		xEvent_t e;
+		InitEvent(e,acceptfd,pclientEvent,DataCallback);
+		Demultiplexer->RequestEvent(e);
+	}
+	else if(pclientEvent==NULL)
+	{
+		//pserver->m_readptr=DataCallback;
+		xEvent_t e;
+		InitEvent(e,acceptfd,arg,DataCallback);
+		Demultiplexer->RequestEvent(e);
+	}
+	
+	return ;
+}
+void Eventcallback::DataCallback(int sockfd,xEventDemultiplexer*Demultiplexer,void *arg)
+{
+	char buf[MAXREADSIZE]={0};
+	int len=MAXREADSIZE;
+	xReceivebackbase*pserver = (xReceivebackbase*)arg;
+	if(!pserver)	return ;
+	int iret = ReadSocket(sockfd,buf,len);
+	len=sizeof(buf);
+	if(iret==0)
+	{
+		CloseSocket(sockfd);
+		if(Demultiplexer)
+			Demultiplexer->UnrequestEvent(sockfd);
+		//ShutDownSocket(listentfd,0);
+		pserver->Onclose(sockfd);
+		//CloseSocket(listentfd);
+	}
+	else if(iret>=0)
+		pserver->Ondata(sockfd,buf,iret);
+	else
+		return ;
+}
+void Eventcallback::ErrCallback(int sockfd,xEventDemultiplexer*Demultiplexer,void *arg)
+{
+
+}/26             1555736895  0     0     100755  2503      `
+//xjshi 2019/3/13
+//�ع�hpp
+#include "xEventDemultiplexer.h"
+using namespace SEABASE;
+#ifndef WIN32
+xEpollDemultiplexer::xEpollDemultiplexer()
+{
+	m_epoll_fd=::epoll_create(FD_SETSIZE);
+	//assert(m_epoll_fd!=-1);
+	m_fd_num=0;
+}
+xEpollDemultiplexer::~xEpollDemultiplexer()
+{
+	::close(m_epoll_fd);
+}
+
+//��ʱΪ0,���������������أ�timeout��λ ms.
+int xEpollDemultiplexer::WaitEvents( int timeout/* =0 */,xtime_heap* event_timer/* =NULL */ )
+{
+	std::vector<epoll_event> ep_events(m_fd_num);
+	int num = epoll_wait(m_epoll_fd,&ep_events[0],ep_events.size(),timeout);
+	if(num > 0)
+	{
+		for(int idx = 0;idx<num;++idx)
+		{
+			int handle = ep_events[idx].data.fd;
+
+			if(ep_events[idx].events & EPOLLERR || (ep_events[idx].events & EPOLLHUP))
+			{
+				if(m_handlers[handle].m_errorptr)
+				{
+					m_handlers[handle].m_errorptr(handle,this,(void*)m_handlers[handle].m_errorarg);
+				}
+			}
+			else
+			{
+				if(ep_events[idx].events & EPOLLIN)
+				{
+					//(*handlers)[handle]->HandleRead(handle,this);
+					if(m_handlers[handle].m_readptr)
+					{
+						m_handlers[handle].m_readptr(handle,this,(void*)m_handlers[handle].m_readarg);
+					}
+				}
+				if(ep_events[idx].events & EPOLLOUT)
+				{
+					if(m_handlers[handle].m_writeptr)
+					{
+						m_handlers[handle].m_writeptr(handle,this,(void*)m_handlers[handle].m_writearg);
+					}
+				}
+			}
+		}
+
+	}
+	if(event_timer !=NULL)
+	{
+		event_timer->tick();
+	}
+	return num;
+}
+
+int xEpollDemultiplexer::RequestEvent(xEvent_t&e)
+{
+	epoll_event ep_event;
+	ep_event.data.fd = e.m_Eventfd;
+	ep_event.events = 0;
+	if(e.m_eventmask &xReadEvent ) //	 ���¼�
+	{
+		ep_event.events |= EPOLLIN;
+	}
+	if(e.m_eventmask&xWriteEvent) // д�¼�
+	{
+		ep_event.events |=EPOLLOUT;
+	}
+	if(epoll_ctl(m_epoll_fd,EPOLL_CTL_MOD,e.m_Eventfd,&ep_event)!=0)
+	{
+		if(errno ==ENOENT)
+		{
+			if(epoll_ctl(m_epoll_fd,EPOLL_CTL_ADD,e.m_Eventfd,&ep_event)!=0)
+			{
+				return -errno;
+			}
+			++m_fd_num;
+		}
+	}
+	int handle = e.m_Eventfd;
+	std::map<handle_t,xEvent_t>::iterator it = m_handlers.find(handle);
+	if(it==m_handlers.end())
+	{
+		m_handlers[handle]=e;
+	}
+	return 0;
+}
+
+int xEpollDemultiplexer::UnrequestEvent(handle_t handle)
+{
+	epoll_event ep_event;
+	if(epoll_ctl(m_epoll_fd,EPOLL_CTL_DEL,handle,&ep_event)!=0)
+	{
+		return -errno;
+	}
+	--m_fd_num;
+	std::map<handle_t,xEvent_t>::iterator it = m_handlers.find(handle);
+	if(it==m_handlers.end())
+	{
+		m_handlers.erase(handle);
+	}
+}
+
+#endif
+
+xsema.cpp/      1555737031  0     0     100755  2251      `
+#include "xsema.h"
+using namespace SEABASE;
+
+#ifndef _WIN32
+static int32_t get_abs_timespec(struct timespec* ts, int32_t millisecond) {
+	struct timeval tv;
+	int32_t ret;
+
+	if (NULL == ts) {
+		return EINVAL;
+	}
+
+	ret = gettimeofday(&tv, NULL);
+	if (0 != ret) {
+		return ret;
+	}
+
+	ts->tv_sec = tv.tv_sec;
+	ts->tv_nsec = tv.tv_usec * 1000UL;
+
+	ts->tv_sec += millisecond / 1000UL;
+	ts->tv_nsec += millisecond % 1000UL * 1000000UL;
+
+	ts->tv_sec += ts->tv_nsec/(1000UL * 1000UL *1000UL);
+	ts->tv_nsec %= (1000UL * 1000UL *1000UL);
+
+	return 0;
+}
+#endif
+xSemaphore::xSemaphore(int init)
+{
+	if(init<0)
+	{
+		init=0;
+	}
+#ifdef _WIN32
+	_sem = CreateSemaphore(NULL,init,LONG_MAX,NULL);
+#else
+	sem_init(&_sem,0,init);
+#endif
+}
+
+xSemaphore::~xSemaphore()
+{
+#ifdef _WIN32
+	if(NULL!=_sem)
+	{
+		bool ret = CloseHandle(_sem);
+		if(0!=ret)
+		{
+			_sem=NULL;
+		}
+	}
+#else
+	sem_destroy(&_sem);
+#endif
+}
+
+int32_t xSemaphore::wait(uint32_t millisecond /* = INFINITE */)
+{
+#ifdef _WIN32
+	if(NULL==_sem){return SEA_NULL_POINTER;}
+	DWORD ret = WaitForSingleObject(_sem,millisecond);
+	if(WAIT_OBJECT_0 == ret || WAIT_ABANDONED == ret){return 0;}
+	else if (WAIT_TIMEOUT == ret)
+	{
+		return SEA_TIMEOUT;
+	}
+	else return SEA_SYSERROR;
+#else
+	int32_t ret = 0;
+	if(millisecond == INFINITE)
+	{
+		while((ret=sem_wait(&_sem))==-1&&EINTR==errno);
+	}
+	else{
+		struct timespec ts = {0,0};
+		get_abs_timespec(&ts,millisecond);
+		while((ret=sem_timedwait(&_sem,&ts))==-1&&EINTR==errno);
+	}
+	if(0!=ret)
+	{
+		if(errno == ETIMEDOUT)
+			return SEA_TIMEOUT;
+		else
+			return SEA_SYSERROR;
+	}
+
+	return SEA_SUCCESS;
+#endif
+}
+bool xSemaphore::try_wait(){
+#ifdef _WIN32
+	if (NULL == _sem) {
+		return false;
+	}
+
+	DWORD ret = WaitForSingleObject(_sem, 0);
+	if (WAIT_OBJECT_0 == ret || WAIT_ABANDONED == ret) {
+		return true;
+	}
+
+	return false;
+#else
+	int32_t ret=0;
+	while((ret=sem_trywait(&_sem))==-1 && EINTR==errno);
+	return (0==ret);
+#endif
+
+}
+
+int32_t xSemaphore::signal()
+{
+#ifdef _WIN32
+	bool ret = FALSE;
+	if(NULL != _sem)
+	{
+		ret = ReleaseSemaphore(_sem,1,NULL);
+	}
+	return (0!=ret?0:SEA_SYSERROR);
+#else
+	int32_t ret=0;
+	while((ret=sem_post(&_sem))==-1&&EINTR==errno);
+	return (0==ret?0:SEA_SYSERROR);
+#endif
+}
+xthreadbase.cpp/1555737063  0     0     100755  3000      `
+#include "xthreadbase.h"
+using namespace SEABASE;
+
+#ifdef WIN32
+	 unsigned int __stdcall Threadbase::thread_proxy(void* arg)
+#else
+	 void*  __stdcall Threadbase::thread_proxy(void* arg)
+#endif
+{
+	Threadbase* pbase=static_cast<Threadbase*> (arg);
+// 	pbase->m_LockState.lock();
+// 	pbase->m_ConditionState.signal();
+// 	pbase->m_LockState.unlock();
+	pbase->m_sema.signal();
+	pbase->run();
+	return 0;
+}
+
+Threadbase::Threadbase(bool bDetach):m_state(INIT),bExit_(false)
+{
+	thr_id=0;
+}
+Threadbase::~Threadbase()
+{
+	//join();
+	m_sema.signal();
+	destory();
+	m_state=STOP;
+	//printf("~Threadbase\n");
+}
+
+int Threadbase::start()
+{
+	if(m_state!=INIT)
+		return -1;
+	//xAutoLock L(m_LockState);
+#ifdef WIN32
+	unsigned int nval=_beginthreadex(0,0,thread_proxy,this,0,&thr_id);
+	thr_id=nval;
+#else
+	pthread_attr_t attr;
+	int arg=0;
+	pthread_create(&thr_id,NULL,thread_proxy,this);
+#endif
+	m_sema.wait();
+	
+	m_state=START;
+	return 0;
+}
+int Threadbase::join()
+{
+	if(m_state!=START&&m_state!=STOP)
+		return -1;
+#ifdef WIN32
+	//WAIT_OBJECT 表示执行结束
+	if(thr_id!=0)
+	{
+		DWORD dw= WaitForSingleObject(reinterpret_cast<HANDLE>(thr_id),INFINITE);
+		if(WAIT_OBJECT_0==dw ||WAIT_ABANDONED == dw)
+		{
+			CloseHandle(reinterpret_cast<HANDLE>(thr_id)); //释放句柄资源，线程并没有结束
+			thr_id=0;
+			printf("\n join thread %d finish\n",thr_id);
+		}
+	}
+#else
+	pthread_join(thr_id,NULL);
+#endif
+	m_state = JOINED;
+	return 0;
+}
+void Threadbase::destory()
+{
+	if(m_state!=STOP && m_state>=START)
+	{
+		bExit_ = true;
+		m_state = STOP;
+#ifdef WIN32
+		CloseHandle(reinterpret_cast<HANDLE>(thr_id));
+#else
+		int thread_return;
+		//pthread_exit((void*)&thread_return); //如果强行退出，线程里面的一些对象资源不会调用析构，可能会内存泄露
+#endif
+		thr_id=NULL;
+	}
+
+}
+//////////////////////////////////////////////////////////////////////////
+//xThread 实现
+
+
+int xThread::start(pfunc func,void *arg)
+{
+	if(m_state!=INIT)
+		return -1;
+#ifdef WIN32
+	unsigned int nval=_beginthreadex(0,0,func,arg,0,&thr_id);
+	thr_id=nval;
+#else
+	pthread_create(&thr_id,NULL,func,arg);
+#endif
+	m_state=START;
+	return 0;
+}
+int xThread::join()
+{
+	if(m_state!=START&&m_state!=STOP)
+		return -1;
+#ifdef WIN32
+	//WAIT_OBJECT 表示执行结束
+	if(thr_id!=0)
+	{
+		DWORD dw= WaitForSingleObject(reinterpret_cast<HANDLE>(thr_id),INFINITE);
+		if(WAIT_OBJECT_0==dw ||WAIT_ABANDONED == dw)
+		{
+			CloseHandle(reinterpret_cast<HANDLE>(thr_id)); //释放句柄资源，线程并没有结束
+			thr_id=0;
+			printf("\n join thread %d finish\n",thr_id);
+		}
+	}
+#else
+	pthread_join(thr_id,NULL);
+#endif
+	m_state = JOINED;
+	return 0;
+}
+void xThread::destory()
+{
+	if(m_state!=STOP && m_state>=START)
+	{
+		bExit_ = true;
+		m_state = STOP;
+#ifdef WIN32
+		CloseHandle(reinterpret_cast<HANDLE>(thr_id));
+#else
+		int thread_return;
+		//pthread_exit((void*)&thread_return);
+#endif
+	}
+}xEmutex.cpp/    1555737197  0     0     100755  2242      `
+#include "xEmutex.h"
+using namespace SEABASE;
+#ifndef _WIN32
+static int32_t get_abs_timespec(struct timespec* ts, int32_t millisecond) {
+	struct timeval tv;
+	int32_t ret;
+
+	if (NULL == ts) {
+		return EINVAL;
+	}
+
+	ret = gettimeofday(&tv, NULL);
+	if (0 != ret) {
+		return ret;
+	}
+
+	ts->tv_sec = tv.tv_sec;
+	ts->tv_nsec = tv.tv_usec * 1000UL;
+
+	ts->tv_sec += millisecond / 1000UL;
+	ts->tv_nsec += millisecond % 1000UL * 1000000UL;
+
+	ts->tv_sec += ts->tv_nsec/(1000UL * 1000UL *1000UL);
+	ts->tv_nsec %= (1000UL * 1000UL *1000UL);
+
+	return 0;
+}
+#endif
+xEmutex::xEmutex()
+{
+#ifdef _WIN32
+	_mutex = CreateMutex(NULL, FALSE, NULL);
+#else
+	int32_t ret = 0;
+	pthread_mutexattr_t attr;
+
+	ret = pthread_mutexattr_init(&attr);
+	if (0 != ret) {
+		ret = pthread_mutex_init(&this->_mutex, NULL);
+	} else {
+		ret = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK_NP);
+		ret = pthread_mutex_init(&_mutex, &attr);
+		pthread_mutexattr_destroy(&attr);
+	}
+#endif
+}
+
+xEmutex::~xEmutex()
+{
+#ifdef _WIN32
+	BOOL ret = CloseHandle(_mutex);
+	if (0 != ret) {
+		_mutex = NULL;
+	}
+#else
+	pthread_mutex_destroy(&_mutex);
+#endif
+}
+
+int32_t xEmutex::lock(uint32_t millisecond) {
+#ifdef _WIN32
+	if (NULL == _mutex) {
+		return SEA_NULL_POINTER;
+	}
+
+	DWORD ret = WaitForSingleObject(_mutex, millisecond);
+	if (WAIT_OBJECT_0 == ret) {
+		return 0;
+	}
+	else if (WAIT_TIMEOUT == ret) {
+		return SEA_TIMEOUT;
+	}
+	else {
+		return SEA_SYSERROR;
+	}
+#else
+	int32_t ret = 0;
+
+	if (INFINITE == millisecond) {
+		ret = pthread_mutex_lock(&_mutex);
+	}
+	else {
+		struct timespec ts = {0, 0};
+		get_abs_timespec(&ts, millisecond);
+		ret = pthread_mutex_timedlock(&_mutex, &ts);
+	}
+
+	if (0 != ret) {
+		int32_t e = errno;
+		if (ETIMEDOUT == e) {
+			return SEA_TIMEOUT;
+		}
+		else {
+			return SEA_SYSERROR;
+		}
+	}
+	return 0;
+#endif
+}
+
+int32_t xEmutex::try_lock() {
+#ifdef _WIN32
+	return lock(1);
+#else
+	int32_t ret = 0;
+	ret = pthread_mutex_trylock(&_mutex);
+	return (0 == ret ? 0 : SEA_SYSERROR);
+#endif
+}
+
+int32_t xEmutex::unlock() {
+#ifdef _WIN32
+	BOOL ret = FALSE;
+
+	if (NULL != _mutex) {
+		ret = ReleaseMutex(_mutex);
+	}
+	return (0 != ret ? 0 : SEA_SYSERROR);
+#else
+	int32_t ret = 0;
+	ret = pthread_mutex_unlock(&_mutex);
+	return (0 == ret ? 0 : SEA_SYSERROR);
+#endif
+} /51             1555737176  0     0     100755  5163      `
+#include "xEthreadpool.h"
+using namespace SEABASE;
+/*class xShareable*/
+xShareable::xShareable() : m_count(0) { }
+
+void xShareable::inc()
+{
+	xEAutoLock lock(&m_mutex);
+	++m_count;
+}
+int32_t xShareable::dec()
+{
+	xEAutoLock lock(&m_mutex);
+	if(m_count>0)
+		--m_count;
+	return m_count;
+}
+int32_t xShareable::get_count()
+{
+	xEAutoLock lock(&m_mutex);
+	return m_count;
+}
+
+/* class xRunable*/
+
+/*class xEthreadbase*/
+xEthreadbase::xEthreadbase(xsmartPtr<xRunable>runner,bool detached )
+	: m_use_functor(true),
+	m_runfuncptr(runner),
+	m_funcptr(NULL),
+	m_func_arg(NULL),
+	m_detached(detached),
+	m_state(INIT),
+	m_isstoped(false)
+#ifdef _WIN32
+	,_handle(NULL)
+#endif
+{ }
+
+xEthreadbase::xEthreadbase(threadfunc_t func, void* arg , bool detached)
+	: m_use_functor(false),
+	m_funcptr(func),
+	m_func_arg(arg),
+	m_detached(detached),
+	m_state(INIT),
+	m_isstoped(false)
+#ifdef WIN32
+	,_handle(NULL)
+#endif
+{ }
+xEthreadbase::~xEthreadbase()
+{
+	join();
+	m_state=STOP;
+}
+bool xEthreadbase::start()
+{
+	if(INIT!=m_state)
+		return false;
+	//xAutoLock L(m_LockState);
+#ifdef WIN32
+	_handle = _beginthreadex(0,0,thread_proxy,this,0,&_thread_id);
+#else
+	int ret;
+	pthread_attr_t attr;
+	ret = pthread_attr_init(&attr);
+	if (0 != ret) {
+		return false;
+	}
+	int arg=0;
+	pthread_create(&_thread_id,NULL,thread_proxy,this);
+#endif
+	//m_ConditionState.wait(m_LockState);
+	m_sema.wait();
+	m_state=START;
+	return 0;
+
+}
+bool xEthreadbase::join()
+{
+	if(m_state!=START&&m_state!=STOP)
+		return false;
+#ifdef WIN32
+	//WAIT_OBJECT ��ʾִ�н���
+	if(_handle!=0)
+	{
+		DWORD dw= WaitForSingleObject(reinterpret_cast<HANDLE>(_thread_id),INFINITE);
+		if(WAIT_OBJECT_0==dw ||WAIT_ABANDONED == dw)
+		{
+			CloseHandle(reinterpret_cast<HANDLE>(_handle)); //�ͷž����Դ���̲߳�û�н���
+			_handle=0;
+			printf("\n join thread %d finish\n",_handle);
+		}
+	}
+#else
+	pthread_join(_thread_id,NULL);
+#endif
+	m_state = JOINED;
+	return 0;
+}
+bool xEthreadbase::stop()
+{
+	bool ret = false;
+	if (m_state != STOP && m_state >= START)
+	{
+		m_isstoped = true;
+		m_state = STOP;
+		ret = true;
+	}
+	return ret;
+}
+#ifdef WIN32
+unsigned int xEthreadbase::get_thread_id() const
+{
+	return _thread_id;
+}
+size_t xEthreadbase::gethandle()
+{
+	return _handle;
+}
+#else
+pthread_t xEthreadbase::get_thread_id() const
+{
+	return _thread_id;
+}
+#endif
+#ifdef WIN32
+unsigned int xEthreadbase::thread_proxy(void* arg)
+#else
+void* xEthreadbase::thread_proxy(void* arg)
+#endif
+{
+	xEthreadbase*thread = (xEthreadbase*)arg;
+	xsmartPtr<xRunable> runner=thread->m_runfuncptr;
+	bool use_functor = thread->m_use_functor;
+	threadfunc_t func = thread->m_funcptr;
+	void *parg = thread->m_func_arg;
+	thread->m_sema.signal();
+
+	if(use_functor)	//ʹ���˵�һ�ֵĹ��캯��
+	{
+		if(runner.is_valid())
+		{
+			runner->Onrun(&thread->m_isstoped,arg);
+		}
+	}
+	else
+	{
+		if(func)
+		{
+			func(&thread->m_isstoped,arg);
+		}
+	}
+	return 0;
+}
+
+/* class threadgroup*/
+
+xThreadGroup::xThreadGroup()
+{
+
+}
+xThreadGroup::~xThreadGroup()
+{
+
+}
+bool xThreadGroup::addThread(xsmartPtr<xEthreadbase>thread)
+{
+	try {
+		m_threads.push_back(thread);
+	} catch(std::bad_alloc& ) {
+		return false;
+	}
+	return true;
+}
+bool xThreadGroup::join()
+{
+	citr_type citr;
+
+	for (citr = m_threads.begin(); citr != m_threads.end(); ++citr) {
+		(*citr)->join();
+	}
+
+	m_threads.clear();
+
+	return true;
+}
+size_t xThreadGroup::size()
+{
+	return m_threads.size();
+}
+bool xThreadGroup::terminateAll()
+{
+	citr_type citr;
+
+	for (citr = m_threads.begin(); citr != m_threads.end(); ++citr) {
+		(*citr)->stop();
+	}
+
+	return true;
+}
+
+/* class xThreadPool*/
+class xThreadPool::ThreadPoolRunner:public xRunable
+{
+public:
+	ThreadPoolRunner(xThreadPool*tp);
+	virtual int32_t Onrun(const bool * isstoped,void*param=NULL);
+private:
+	xThreadPool* _tp;
+};
+xThreadPool::ThreadPoolRunner::ThreadPoolRunner(xThreadPool*tp):_tp(tp)
+{
+
+}
+int32_t xThreadPool::ThreadPoolRunner::Onrun(const bool * isstoped,void*param)
+{
+	while(!(*isstoped))
+	{
+		xRunable* prun=NULL;
+		if(_tp->m_tasks.get(prun, INFINITE)==0&&prun){
+			prun->Onrun(isstoped, param);
+		}
+	}
+	return 0;
+}
+xThreadPool::xThreadPool():m_state(UNINITIALIZED)
+{
+
+}
+xThreadPool::~xThreadPool()
+{
+	terninate();
+}
+//static const int DEFAULT_THREADS_NUM = 10; //Ĭ���߳�����
+int xThreadPool::init(int nThreads)
+{
+	int ret = 0;
+	if (UNINITIALIZED == m_state) {
+		m_state = INITIALIZED;
+
+		addthread(nThreads);
+	}
+
+	return ret;
+}
+bool xThreadPool::addTask(xRunable* runinst)
+{
+	return 0 == m_tasks.put(runinst);
+}
+bool xThreadPool::join()
+{
+	 return m_threadgroup.join();
+}
+size_t xThreadPool::size()
+{
+	return m_threadgroup.size();
+}
+bool xThreadPool::terninate()
+{
+	return m_threadgroup.terminateAll();
+}
+int xThreadPool::addthread(int nthreads) {
+	int ret = 0;
+	for (int i = 0; i < nthreads; ++i) {
+		xsmartPtr<xEthreadbase>workerThread =xsmartPtr<xEthreadbase>(new xEthreadbase(xsmartPtr<ThreadPoolRunner>(new ThreadPoolRunner(this))));
+		if (workerThread.is_valid()) {
+			workerThread->start();
+			m_threadgroup.addThread(workerThread);
+			++ret;
+		}
+	}
+	return ret;
+}
+xReactor.cpp/   1555602333  0     0     100755  1997      `
+//xjshi 2019/3/13 
+//�ع�hpp xReacotr.cpp
+
+#include "xReactor.h"
+using namespace SEABASE;
+using namespace std;
+xReactor::xReactor()
+{
+	m_reactorimp = new xReactorImplentation();
+
+}
+xReactor::~xReactor()
+{
+	if(m_reactorimp!=NULL)
+	{
+		delete m_reactorimp;
+		m_reactorimp=NULL;
+	}
+}
+int xReactor::RegisterHandler(xReceivebackbase*handler,SEABASE::handle_t&sockfd,int type)
+{
+	return m_reactorimp->RegisterHandler(handler,sockfd,type);
+}
+
+// int xReactor::RemoveHandler(xEventHandler* handler)
+// {
+// 	return m_reactorimp->RemoveHandler(handler);
+// }
+int xReactor::RemoveHandlerbyfd(SEABASE::handle_t handlefd)
+{
+	return m_reactorimp->RemoveHandlerbyfd(handlefd);
+}
+void xReactor::HandlerEvents()
+{
+	m_reactorimp->StartLoop();
+}
+int xReactor::RegisterTimeTask(xheaptimer* timerevent)
+{
+	m_reactorimp->RegisterTimeTask(timerevent);
+	return 0;
+}
+
+
+int xReactorImplentation::RegisterHandler(xReceivebackbase*handler,SEABASE::handle_t&sockfd,int type)
+{
+	xEvent_t e;
+	if(type==datatype::TcpAcceptCallback)
+		Eventcallback::InitEvent(e,sockfd,handler,Eventcallback::AcceptCallback);
+	else if(type==datatype::TcpDataCallback)
+		Eventcallback::InitEvent(e,sockfd,handler,Eventcallback::DataCallback);
+	return m_demultiplexer->RequestEvent(e);
+}
+
+int xReactorImplentation::RemoveHandlerbyfd(SEABASE::handle_t handlefd)
+{
+	return m_demultiplexer->UnrequestEvent(handlefd);
+}
+//���������¼�ѭ����
+//����start
+void xReactorImplentation::HandlerEvents()
+{
+	while(!_bIsstop)
+	{
+		int timeout = 1;
+		if(m_eventtimer->top() ==NULL)
+		{
+			timeout = 1;
+		}
+		else
+		{
+			timeout = (m_eventtimer->top()->expire-time(NULL))*1000;
+		}
+		if(m_demultiplexer==NULL)
+			return;
+		m_demultiplexer->WaitEvents(timeout,m_eventtimer);
+
+	}
+}
+int xReactorImplentation::RegisterTimeTask(xheaptimer* timerevent)
+{
+	if(timerevent == NULL)
+		return -1;
+	m_eventtimer->add_timer(timerevent);
+	return 0;
+}
+xReactor* ReactorInstance::m_reactor=NULL;
+xEtcpclient.cpp/1555731428  0     0     100755  648       `
+#include "xEtcpclient.h"
+using namespace  SEABASE;
+
+int ExTcpClient::connectTCP(char*serverip,int serverport)
+{
+	strcpy(m_serverip,serverip);
+	m_serverport=serverport;
+	struct sockaddr_in tcpddr;
+	tcpddr.sin_family=AF_INET;
+	tcpddr.sin_addr.s_addr=inet_addr(m_serverip);
+	tcpddr.sin_port=htons(m_serverport);
+	return ConnectSocket(m_sockfd,(sockaddr*)&tcpddr,sizeof(struct sockaddr_in));
+}
+int ExTcpClient::recieve(char* buf,int len)
+{
+	return ReadSocket(m_sockfd,buf,len,0);
+
+}
+int ExTcpClient::sendMsg(char*buf,int len)
+{
+	return SendSocket(m_sockfd,buf,len);
+}
+int ExTcpClient::close()
+{
+	return CloseSocket(m_sockfd);
+}

@@ -1,0 +1,11 @@
+Information about the build environment:
+
+OS information : Linux-4.1.12-112.14.10.el6uek.x86_64
+C   compiler   : GNU 6.3.1
+C++ compiler   : GNU 6.3.1
+GLIBC version   : (GNU libc) 2.12
+
+
+Legacy connector information:
+
+MySQL version  : 8.0.12

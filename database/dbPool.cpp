@@ -67,8 +67,11 @@ Connection *DBPool::CreateConnection()
     Connection *conn;
     try
     {
-        // conn = driver->connect(url, user, password); //create a conn
-        conn = driver->connect("tcp://127.0.0.1:3306", "root", ""); //create a conn
+        string url="tcp://"+this->url;
+        string user=this->user;
+        string password=this->password;
+        conn = driver->connect(url, user, password); //create a conn
+        //conn = driver->connect("tcp://127.0.0.1:3306", "root", ""); //create a conn
 
         return conn;
     }

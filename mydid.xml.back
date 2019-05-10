@@ -1,0 +1,23 @@
+<include>
+  <extension name="mydid">
+    <condition field="destination_number" expression="^(.*)$">
+      <!--
+	  If you're hosting multiple domains you will want to set the
+	  target_domain on these calls so they hit the proper domain after you
+	  transfer the caller into the default context. 
+	  
+	  $${domain} is the default domain set from vars.xml but you can set it
+	  to any domain you have setup in your user directory.
+
+      --> 
+
+ <!-- <action application="playback" data="/home/call_9913928779690.wav" />-->
+<action application="export" data="record_sample_rate=8000"/>
+      <action application="socket" data="127.0.0.1:8040 async full"/> 
+
+      <!-- This example maps the DID 5551212 to ring 1000 in the default context -->
+
+
+    </condition>
+  </extension>
+</include>

@@ -19,8 +19,8 @@ struct base_script_t
 	uint32_t nodeId;		   ///当前结点ID
 	string desc;			   ///<流程描述
 	uint32_t taskId;		   // 出口ID
-	string userWord;		   ///<比较关键词 比如：关键词1:出口1|关键词2:出口2
-	string vox_base;		   ///<语音文件根路径
+	string userWord;		   ///<比较关键�?比如：关键词1:出口1|关键�?:出口2
+	string vox_base;		   ///<语音文件根路�?
 
 	std::string bill_info();
 };
@@ -44,24 +44,73 @@ typedef struct agent_s
 struct callout_info_t
 {
   public:
+	int N_user_id;
+	int N_enterprose_id;
+	int N_company_id;
+	int N_department_id;
+	string N_user_number;
+	string N_customer_number;
+	string N_call_id;
+	string N_call_record;
+	string N_number_attribution;
+	string N_gateway_url;
+	string N_call_start_time;
+	string N_call_end_time;
+	int	N_call_duration;
+	string N_callstate;
+	string N_extension_number;
+	string N_call_prefix;
+	string N_record_file;
+	string N_call_type;
+	string N_skill_id;
+	int N_delete_status;
+	string N_create_at;
+	string N_update_at;
+	string N_create_persion;
 	//////////////////////////////////////////////////////////////////////////
 	string group_id;	 // bigint,
-	string number;		 //�������
-	string agent_number; //��ϯ����
+	string number;		 //
+	string agent_number; //
 
-	int call_state;		// integer DEFAULT 0, -- ����״̬
-	string record_file; // character varying(255), -- ¼���ļ�
+	int call_state;		// integer DEFAULT 0, 
+	string record_file; // character varying(255), 
 
 	//////////////////////////////////////////////////////////////////////////
 	string gateway_url; //gateway url
-	string call_prefix; //����ǰ׺
-	string unique_uuid; //����ʱaleg��uuid
+	string call_prefix; //
+	string unique_uuid; //
 
 	string extension_number;
 	//////////////////////////////////////////////////////////////////////////
 	uint64_t call_start_time;
 	uint64_t callout_end_time;
 	int call_type;
+	callout_info_t()
+	{
+		N_user_id=0;
+		N_enterprose_id=0;
+		N_company_id=0;
+		N_department_id=0;
+		N_user_number="";
+		N_customer_number="";
+		N_call_id="";
+		N_call_record="";
+		N_number_attribution="";
+		N_gateway_url="";
+		N_call_start_time="";
+		N_call_end_time="";
+		N_call_duration=0;
+		N_callstate="2";
+		N_extension_number="";
+		N_call_prefix="";
+		N_record_file="";
+		N_call_type="";
+		N_skill_id="";
+		N_delete_status=0;
+		N_create_at="";
+		N_update_at="";
+		N_create_persion="";
+	}
 	virtual ~callout_info_t() {}
 };
 
@@ -79,6 +128,28 @@ struct Route
 	string agent;
 	string group_id;
 };
+struct agent_login
+{
+	string agentid;
+	string passwd;
+};
 
-
+struct t_ivrnode
+{
+	int enterprise_id;
+	int company_id;
+	int node_id;
+	string descript;
+	string user_word;
+	string recordfile;
+	t_ivrnode()
+	{
+		enterprise_id=0;
+		company_id=0;
+		node_id=0;
+		descript="";
+		user_word="";
+		recordfile="";
+	}
+};
 #endif
