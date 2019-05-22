@@ -33,7 +33,7 @@ enum SessionState
 typedef struct ivrsession
 {
 public:
-	ivrsession():m_customtype(IVR_normail),m_startTimestamp(time(NULL)),m_sessionState(IVR_Session_call)
+	ivrsession():m_customtype(IVR_normail),m_startTimestamp(time(NULL)),m_sessionState(IVR_Session_call),m_newhandle(NULL)
 	{
 
 	}
@@ -44,6 +44,7 @@ public:
 	int m_customtype;
 	int m_startTimestamp;
 	esl_handle_t *m_handle;
+	esl_handle_t *m_newhandle;
 	int m_sessionState;				//呼入会话通话状态
 	friend bool operator < (ivrsession a,ivrsession b)
 	{
@@ -61,6 +62,7 @@ public:
 	Managerivr(){}
 	~Managerivr(){}
 	static void Init();
+	static void Reload();
 	static Managerivr*Instance();
 	static void Initivrflow(vector<t_ivrnode>&nodetable);
 	t_ivrnode* Getnodeinfo(int companyid,int currentnode,string dtmfnum);

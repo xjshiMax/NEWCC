@@ -34,6 +34,7 @@ int main(int argc, char const *argv[])
 {
    
 	ManagerDN* pmanager=ManagerDN::Instance();
+	pmanager->loadConfigini();
 	pmanager->loaddb();
 	pmanager->startServer();
 

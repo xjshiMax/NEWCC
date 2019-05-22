@@ -14,6 +14,12 @@ void Managerivr::Init()
 	db_operator_t::GetivrTable(nodetable);
 	Initivrflow(nodetable);
 }
+void Managerivr::Reload()
+{
+		 m_IVRnodetable.clear();
+		 m_flowtable.clear();
+		 Init();
+}
 void Managerivr::Initivrflow(vector<t_ivrnode>&nodetable)
 {
 	vector<t_ivrnode>::iterator ite=nodetable.begin();

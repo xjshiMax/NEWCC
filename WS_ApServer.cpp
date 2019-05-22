@@ -1,14 +1,15 @@
 #include "WS_ApServer.h"
 #include "DNManager.h"
 #include "base/jsoncpp/json/json.h"
+#include "base/output/include/xStringuil.h"
 using websocketpp::lib::bind;
-
+using namespace websocketpp;
 char* CmdType[]={
-	"SignIn","SignOut","SetAgentStatus","GetAgentStatus","ResetStatuschangetype","ResetAutoAnswer",
-	"ResetSkill","Reset",
-	"OutboundCall","AnswerCall","ReleaseCall","Hold","Retrieve","Consult","ConsultReconnect","ConsultTransfer","SingleStepTransfer","ConsultConference"
+	"login","logout","changestate","GetAgentStatus","ResetStatuschangetype","ResetAutoAnswer",
+	"ResetSkill","reset",
+	"dial","AnswerCall","ReleaseCall","Hold","Retrieve","Consult","ConsultReconnect","ConsultTransfer","SingleStepTransfer","ConsultConference"
 	,"ConferenceJoin","SetAssociateData","GetAssociateData","JumptheQueue","ForceSignIn",
-	"ResetConfig"
+	"ResetConfig","getusers","heartbeat"
 };
 WSapserver::WSapserver()
 {
@@ -117,17 +118,17 @@ void WSapserver::on_callapclient(wsServer *s, websocketpp::connection_hdl hdl,st
 	Json::Value root;
 	if(!reader.parse(applicationcmd,root))
 	{
-		string respmsg = OnparamError(-1,"json parse failed","");
+		string respmsg = OnparamError(-1,"json parse failed","","");
 		s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 		return;
 	}
-	if(root["Action"].isNull()||!root["Action"].isString())
+	if(root["action"].isNull()||!root["action"].isString())
 	{
-		string respmsg = OnparamError(-1,"lose [Action] field","");
+		string respmsg = OnparamError(-1,"lose [action] field","","");
 		s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 		return;
 	}
-	int cmdNUM=GetcmdType(root["Action"].asString());
+	int cmdNUM=GetcmdType(root["action"].asString());
 	//acd::AcdResultT ret;
 	int ret;
 	wsServer::connection_ptr clientconn=	s->get_con_from_hdl(hdl);
@@ -138,7 +139,7 @@ void WSapserver::on_callapclient(wsServer *s, websocketpp::connection_hdl hdl,st
  	jsonparam=root["param"];
  	if(jsonparam.isNull())
 	{
-		string respmsg = OnparamError(-1,"lose param field","");
+		string respmsg = OnparamError(-1,"lose param field","","");
 		s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 		return;
 	}
@@ -146,7 +147,7 @@ void WSapserver::on_callapclient(wsServer *s, websocketpp::connection_hdl hdl,st
 	{
 		if(jsonparam["acdpassword"].isNull()||!jsonparam["acdpassword"].isString())
 		{
-			string respmsg=OnparamError(-1,"lose param of Action ResetConfig field","");
+			string respmsg=OnparamError(-1,"lose param of Action ResetConfig field","","");
 			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 			return;
 		}
@@ -160,88 +161,193 @@ void WSapserver::on_callapclient(wsServer *s, websocketpp::connection_hdl hdl,st
 		s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 		return;
 	}
-	if(jsonparam["agentId"].isNull()||!jsonparam["agentId"].isString())
-	{
-		string respmsg = OnparamError(-1,"lose [agentId] field","");
-		s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
-		return;
-	}
- 	string agentId = jsonparam["agentId"].asString();
-	int64_t handle=-1;
-	if(cmdNUM!=WSAP_SignIn)
-	{
-		if(jsonparam["handle"].isNull()||!jsonparam["handle"].isInt())
-		{
-			string respmsg = OnparamError(-1,"lose [handle] field","");
-			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
-			return;
-		}
-		handle = jsonparam["handle"].asInt();
-	}
 	switch (cmdNUM)
 	{
 	case WSAP_SignIn:
 		{
-			if((jsonparam["agentDn"].isNull()||!jsonparam["agentDn"].isString())||(jsonparam["agentPwd"].isNull()||!jsonparam["agentPwd"].isString())||(jsonparam["statusChangetype"].isNull()||!jsonparam["statusChangetype"].isInt())||
-				(jsonparam["autoAnswer"].isNull()||!jsonparam["autoAnswer"].isBool())||(jsonparam["fcSignin"].isNull()||!jsonparam["fcSignin"].isBool())||(jsonparam["skills"].isNull()||!jsonparam["skills"].isString()))
+			if((jsonparam["userId"].isNull()||!jsonparam["userId"].isString())||(jsonparam["password"].isNull()||!jsonparam["password"].isString()))
 			{
-				string respmsg=OnparamError(-1,"lose param of Action SignIn field",agentId);
+				string respmsg=OnparamError(-1,"lose param of Action SignIn field","","onlogin");
 				s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 				return;
 			}
-			string agentDn = jsonparam["agentDn"].asString();
-			string agentPwd = jsonparam["agentPwd"].asString();
-			int statusChangetype = jsonparam["statusChangetype"].asInt();
-			bool autoAnswer = jsonparam["autoAnswer"].asBool();
-			bool fcSignin = jsonparam["fcSignin"].asBool();
-			string skills = jsonparam["skills"].asString();
+			string userId = jsonparam["userId"].asString();
+			string password = jsonparam["password"].asString();
+			t_Java_userInfo userinfo;
+			bool iret = FindJavaUserInfo(userId,userinfo);
+			if(!iret)
+			{
+				string respmsg=OnparamError(-1,"cannot find the userinfo in bussiness ","","onlogin");
+				s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+				return;
+			}
+			int statusChangetype = 1;
+			bool autoAnswer = 0;
+			bool fcSignin = 0;
+			string skills =userinfo.skill_id;
+			//string department_id = userinfo.department_id+"0";
+			string username=userinfo.user_name;
 			ManagerDN* managerdn=ManagerDN::Instance();
-			int ret = managerdn->Signin(agentId, agentDn, agentPwd, statusChangetype, autoAnswer, fcSignin, skills,
+			int ret = managerdn->Signin(userId, userId, password, statusChangetype, autoAnswer, fcSignin, skills,userinfo.department_id,"",username,
 			 				 peerIP, s,hdl);
-			printf("handle:%lld",handle);
-			string respmsg=OnSignIn(ret,"",agentId,handle);
+
+			string respmsg=OnSignIn(ret,"",userId,userinfo);
 			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 			return;
 		}
 		break;
 	case WSAP_SignOut:
 		{
-// 			BGCC_TRACE("ap", "SignOut AgentId = %s,handle = %" int64ld ".", agentId.c_str(), handle);
-// 			uint64_t time_rcv = TimeUtil::get_timestamp_ms();
-// 			AgentProxy *agentProxy = AgentProxy::Instance();
-// 			ret = agentProxy->SignOut(handle, agentId, peerIP, time_rcv);
+			if((jsonparam["userId"].isNull()||!jsonparam["userId"].isString()))
+			{
+				string respmsg=OnparamError(-1,"lose param of Action SetAgentStatus field","","onlogout");
+				s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+				return;
+			}
+			string userId = jsonparam["userId"].asString();
 			ManagerDN *manager = ManagerDN::Instance();
-			int iret = manager->Signout(agentId,peerIP);
-			string respmsg=Onresponse(iret,"",agentId,"SignOut");
+			int iret = manager->Signout(userId,peerIP);
+			string respmsg=Onresponse(iret,"",userId,"onlogout");
 			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 			return ;
 		}
 		break;
 	case WSAP_SetAgentStatus:
 		{
-			if((jsonparam["restReason"].isNull()||!jsonparam["restReason"].isString())||(jsonparam["agentStatus"].isNull()||!jsonparam["agentStatus"].isInt()))
+			if((jsonparam["userId"].isNull()||!jsonparam["userId"].isString())||(jsonparam["state"].isNull()||!jsonparam["state"].isString()))
 			{
-				string respmsg=OnparamError(-1,"lose param of Action SetAgentStatus field",agentId);
+				string respmsg=OnparamError(-1,"lose param of Action SetAgentStatus field","","onchangestate");
 				s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 				return;
 			}
-			string restReason = jsonparam["restReason"].asString();
+			string agentId = jsonparam["userId"].asString();
+			string restReason = jsonparam["userId"].asString();
  			int agentStatus=jsonparam["agentStatus"].asInt();
 			ManagerDN *manager = ManagerDN::Instance();
 			int iret = manager->SetDNstatus(agentId,agentStatus,restReason,peerIP);
-			string respmsg=Onresponse(iret,"",agentId,"SetAgentStatus");
+			string respmsg=Onresponse(iret,"",agentId,"onchangestate");
 			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 			return;
 		}
 		break;
 	case WSAP_GetAgentStatus:
 		{
+// 			ManagerDN *manager = ManagerDN::Instance();
+// 			int status;
+// 			int ret = manager->GetDNstatus(agentId,status,peerIP);
+// 			string respmsg = OngetAgentStatus(ret,"",agentId,status);
+// 			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+// 			return;
+		}
+		break;
+	case WSAP_getusers:
+		{
+			if((jsonparam["userId"].isNull()||!jsonparam["userId"].isString())||(jsonparam["state"].isNull()||!jsonparam["state"].isString())||
+				(jsonparam["department"].isNull()||!jsonparam["department"].isString()))
+			{
+				string respmsg=OnparamError(-1,"lose param of Action SetAgentStatus field","","ongetusers");
+				s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+				return;
+			}
+			string userId = jsonparam["userId"].asString();
+			string department_id = jsonparam["department"].asString();
+			string status =jsonparam["state"].asString(); 
 			ManagerDN *manager = ManagerDN::Instance();
-			int status;
-			int ret = manager->GetDNstatus(agentId,status,peerIP);
-			string respmsg = OngetAgentStatus(ret,"",agentId,status);
+			vector<DNuser> userlist;
+			int iret = manager->GetUserInfolist(userId,department_id,status,userlist);
+
+			 Json::Value usetlistroot;
+			 Json::Value userlistparam;
+			 Json::Value duserlistdata;
+			 usetlistroot["event"]="ongetusers";
+			 usetlistroot["result"]=iret;
+			 usetlistroot["cause"]="";
+			 vector<DNuser>::iterator ite=userlist.begin();
+			 set<int> departments;
+			 while(ite!=userlist.end())
+			 {
+				 departments.insert(ite->m_department_id);
+				 ite++;
+			 }
+			 set<int>::iterator departmentite=departments.begin();
+			while(departmentite!=departments.end())
+			{
+				 Json::Value departmentset;
+				 Json::Value users;
+				 departmentset["department"]=ite->m_department_id;
+				 ite=userlist.begin();
+				 while(ite!=userlist.end())
+				 {
+					if(ite->m_department_id==*departmentite)
+					{
+						Json::Value info;
+						info["id"]=ite->m_agentid;
+						info["name"]=ite->m_user_name;
+						users.append(info);
+					}
+					ite++;
+				 }
+				 departmentset["users"]=users;
+				 duserlistdata.append(departmentset);
+				 departmentite++;
+			}
+			usetlistroot["data"]=duserlistdata;
+			string respmsg=usetlistroot.toStyledString();
 			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
-			return;
+
+		}
+		break;
+	case WSAP_Reset:
+		{
+			if((jsonparam["userId"].isNull()||!jsonparam["userId"].isString()))
+			{
+				string respmsg=OnparamError(-1,"lose param of Action SetAgentStatus field","","onreset");
+				s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+				return;
+			}
+			string userId = jsonparam["userId"].asString();
+			t_Java_userInfo userinfo;
+			bool iret = FindJavaUserInfo(userId,userinfo);
+			if(!iret)
+			{
+				string respmsg=OnparamError(-1,"cannot find the userinfo in bussiness ",userId,"onreset");
+				s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+				return;
+			}
+			string skills =userinfo.skill_id;
+			//string department_id = userinfo.department_id+'0';
+			string username=userinfo.user_name;
+			ManagerDN* managerdn=ManagerDN::Instance();
+			int iiret = managerdn->ResetDNinfo(userId,userinfo.department_id,"",username);
+			string respmsg = Onreset(iiret,"",userId,userinfo);
+			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+		}
+		break;
+	case WSAP_OutboundCall:
+		{
+			if((jsonparam["userId"].isNull()||!jsonparam["userId"].isString()))
+			{
+				string respmsg=OnparamError(-1,"lose param of Action SetAgentStatus field","","ondial");
+				s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+				return;
+			}
+			string userId=jsonparam["userId"].asString();
+			bool ispermit = GetPermission(userId);
+			string respmsg = Ondail(ret,"",userId,ispermit);
+			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+
+		}
+	case WSAP_Heartbeat:
+		{
+			if((jsonparam["userId"].isNull()||!jsonparam["userId"].isString()))
+			{
+				string respmsg=OnparamError(-1,"lose param of Action SetAgentStatus field","","onreset");
+				s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+				return;
+			}
+			string userId=jsonparam["userId"].asString();
+			string respmsg = Onheartbeat(ret,"",userId);
+			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 		}
 		break;
 /*	case WSAP_ResetStatuschangetype:
@@ -277,12 +383,12 @@ void WSapserver::on_callapclient(wsServer *s, websocketpp::connection_hdl hdl,st
 // 			ret = agentProxy->ResetSkill(handle, agentId, skill, peerIP, time_rcv);
 		}
 		break;
-	case WSAP_Reset:
+		case WSAP_Reset:
 		{
-			BGCC_TRACE("ap", "Reset AgentId = %s,handle = %" int64ld ".", agentId.c_str(), handle);
-			uint64_t time_rcv = TimeUtil::get_timestamp_ms();
-// 			AgentProxy *agentProxy = AgentProxy::Instance();
-// 			ret = agentProxy->Reset(handle, agentId, peerIP, time_rcv);
+		BGCC_TRACE("ap", "Reset AgentId = %s,handle = %" int64ld ".", agentId.c_str(), handle);
+		uint64_t time_rcv = TimeUtil::get_timestamp_ms();
+		AgentProxy *agentProxy = AgentProxy::Instance();
+		ret = agentProxy->Reset(handle, agentId, peerIP, time_rcv);
 		}
 		break;
 	case WSAP_ResetAutoAnswer:
@@ -527,8 +633,8 @@ void WSapserver::on_callapclient(wsServer *s, websocketpp::connection_hdl hdl,st
 		break;*/
 	default:
 		{
-			string respmsg=OnparamError(-1,"unsuport Action",agentId);
-			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
+// 			string respmsg=OnparamError(-1,"unsuport Action",agentId);
+// 			s->send(hdl,respmsg.c_str(), respmsg.length(),frame::opcode::text);
 			return;
 		}
 		break;
@@ -539,15 +645,14 @@ string WSapserver::Onresponse(int code,string desc,string agentId,string operati
 {
 
 	Json::Value respjosn;
-	Json::Value jsoncontent;
 	Json::Value jsonvalue;
-	jsonvalue["desc"]=desc;
+	respjosn["cause"]=desc;
+
 	jsonvalue["agentId"]=agentId;
-	jsoncontent.append(jsonvalue);
 	respjosn["result"]=code;
-	respjosn["param"]=jsoncontent;
-	respjosn["operator"]=operation;
-	respjosn.toStyledString();
+	respjosn["event"]=operation;
+	respjosn["param"]=jsonvalue;
+	respjosn["token"]="";
 	return  respjosn.toStyledString();
 }
 string WSapserver::Onresponse(int code,string desc,string agentId,string strkey2,string param2)
@@ -577,7 +682,7 @@ string WSapserver::Onresponse(int code,string desc,string agentId,string strkey2
 	jsoncontent.append(jsondesc);
 	respjosn["result"]=code;
 	respjosn["param"]=jsoncontent;
-	respjosn["operator"]=operation;
+	respjosn["event"]=operation;
 	respjosn.toStyledString();
 	return  respjosn.toStyledString();
 }
@@ -598,30 +703,95 @@ string WSapserver::Onresponse(int code,string desc,string agentId,string strkey2
 	respjosn.toStyledString();
 	return  respjosn.toStyledString();
 }
-string WSapserver::OnSignIn(int code,string desc,string agentId,int64_t handle)
+string WSapserver::OnSignIn(int code,string desc,string agentId,t_Java_userInfo&userinfo)
 {
-	Json::Value respjosn;
-	Json::Value jsoncontent;
-	Json::Value jsonvalue;
-	Json::Value jsondesc;
-	Json::Value jsonhandle;
-	//jsonvalue["value"]=0;
-	jsonvalue["desc"]=desc;
-	jsonvalue["agentId"]=agentId;
-	//jsonvalue["handle"]=(Json::Int64)handle;
-	jsoncontent.append(jsonvalue);
-	respjosn["result"]=code;
-	respjosn["operator"]="SignIn";
-	respjosn["param"]=jsoncontent;
-	return  respjosn.toStyledString();
+
+	Json::Value root;
+	Json::Value param;
+	Json::Value agentStatus;
+	Json::Value agentInfo;
+	root["event"]="onlogin",
+	root["result"]=code;
+	root["cause"]=desc;
+	agentStatus["userId"]=agentId;
+	agentStatus["status"]="1";
+	agentStatus["lastState"]="1";
+	agentStatus["callType"]="0";
+	agentStatus["targetType"]="";
+	agentStatus["target"]="";
+	agentStatus["heldtarget"]="";
+	agentStatus["callId"]="";
+	agentStatus["privateData"]="";
+	param["agentStatus"]=agentStatus;
+
+	agentInfo["userId"]=agentId;
+	agentInfo["nickName"]=userinfo.nick_name;
+	agentInfo["role"]="" ;
+	agentInfo["department"]=userinfo.department_id;
+	agentInfo["phoneNum"]=userinfo.mobile;
+	agentInfo["enableConference"]="1";
+	agentInfo["enabletransferToIVR"]="1";
+	agentInfo["freeswitchRegAddr"]="";
+	agentInfo["freeswitchMediaAddr"]="";
+
+	param["agentInfo"]=agentInfo;
+	root["param"]=param;
+	root["token"]="";
+	return  root.toStyledString();
+}
+string WSapserver::Onreset(int code,string desc,string agentId,t_Java_userInfo&userinfo)
+{
+	Json::Value root;
+	Json::Value param;
+	Json::Value agentInfo;
+	root["event"]="onreset",
+	root["result"]=code;
+	root["cause"]=desc;
+	agentInfo["userId"]=agentId;
+	agentInfo["nickName"]=userinfo.nick_name;
+	//agentInfo["role"]="" ;
+	agentInfo["department"]=userinfo.department_id;
+	agentInfo["phoneNum"]=userinfo.mobile;
+	agentInfo["enableConference"]="1";
+	agentInfo["enabletransferToIVR"]="1";
+	root["param"]=agentInfo;
+	root["token"]="";
+	return  root.toStyledString();
+}
+string WSapserver::Ondail(int code,string desc,string agentId,bool bforbidden)
+{
+	Json::Value root;
+	Json::Value param;
+	Json::Value agentInfo;
+	root["event"]="ondial",
+		root["result"]=code;
+	root["cause"]=desc;
+	agentInfo["userId"]=agentId;
+	agentInfo["forbidden"]=bforbidden;
+	root["param"]=agentInfo;
+	root["token"]="";
+	return  root.toStyledString();
+}
+string WSapserver::Onheartbeat(int code,string desc,string agentId)
+{
+	Json::Value root;
+	Json::Value param;
+	Json::Value agentInfo;
+	root["event"]="onheartbeat",
+	root["result"]=code;
+	root["cause"]=desc;
+	agentInfo["userId"]=agentId;
+	root["param"]=agentInfo;
+	root["token"]="";
+	return  root.toStyledString();
 }
 string WSapserver::OngetAgentStatus(int code,string desc,string agentId,int status)
 {
 	return Onresponse(code,desc,agentId,"agentStatus",status,"getAgentStatus");
 }
-string WSapserver::OnparamError(int code,string desc,string agentId)
+string WSapserver::OnparamError(int code,string desc,string agentId,string operaton)
 {
-	return Onresponse(code,desc,agentId,"erroroperator");
+	return Onresponse(code,desc,agentId,operaton);
 }
 void WSapserver::Sendevent2dn(wsServer* s, websocketpp::connection_hdl hdl,string msg,string agentId,int64_t handle,int code)
 {
@@ -635,4 +805,19 @@ void WSapserver::Sendevent2dn(wsServer* s, websocketpp::connection_hdl hdl,strin
 	string fullmsg=Eventjosn.toStyledString();
 
 	s->send(hdl,fullmsg.c_str(),fullmsg.length(),frame::opcode::text);
+}
+
+int WSapserver::FindJavaUserInfo(string userid,t_Java_userInfo&userinfo)
+{
+	return db_operator_t::GetJavaUserInfo(userid,userinfo);
+}
+void  WSapserver::GetJavauserInfoList(vector<t_Java_userInfo>&userinfolist)
+{
+    db_operator_t::GetjavauserInfoList(userinfolist);
+}
+bool WSapserver::GetPermission(string userid)
+{
+	bool ispermited=true;
+	db_operator_t::Getpermission(userid,ispermited);
+	return ispermited;
 }

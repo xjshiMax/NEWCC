@@ -1,6 +1,9 @@
 ﻿#include "DNManager.h"
 #include "common/DBOperator.h"
 #include "base/output/include/xTimeuil.h"
+#include "base/output/include/xReactorwithThread.h"
+#include "base/jsoncpp/json/json.h"
+#include "base/inifile/inifile.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/io.h>
@@ -25,10 +28,160 @@ void DNuser::GetagnetStatus(int& agentStatus)
 {
 	agentStatus=m_agentstatus;
 }
+string DNuser::serialize()
+{
+	//Json::Writer writer;
+	Json::Value root;
+	root["commpanyid"]=m_commpanyid;
+	root["DN"]=m_DN;
+	root["agentid"]= m_agentid;
+	root["reason"]= m_reason;
+	root["agentstatus"]= m_agentstatus;
+	root["agentPwd"]= m_agentPwd;
+	root["autoAnswer"]= m_autoAnswer;
+	root["fcSignin"]= m_fcSignin;
+	root["skills"]= m_skills;
+	root["peerIP"]= m_peerIP;
+	return root.toStyledString();
+}
+void DNuser::Unserialize(string serizestr)
+{
+	Json::Reader read;
+	Json::Value root;
+	if(read.parse(serizestr,root))
+	{
+		m_commpanyid=root["commpanyid"].asInt();
+		m_DN=root["DN"].asString();
+		m_agentid=root["agentid"].asString();
+		m_reason=root["reason"].asString();
+		m_agentstatus=root["agentstatus"].asInt();
+		m_agentPwd=root["agentPwd"].asString();
+		m_autoAnswer=root["autoAnswer"].asBool();
+		m_fcSignin=root["fcSignin"].asBool();
+		m_skills=root["skills"].asString();
+		m_peerIP=root["peerIP"].asString();
+		m_s=NULL;
+		//m_hdl=0;
+	}
+}
+void SqlitePersist::LoadDNSet(map<string,DNuser>&dnset)
+{
+	string dbname="data.db";
+	 if(!CreateDB(dbname))
+		 return;
+	 int nrow = 0;
+	 int ncolumn = 0;
+	 char*errmsg=NULL;
+	 char ** azResult; //返回结果集
+	 int iret = sqlite3_get_table(m_pdb , "select * from dnuser" , &azResult , &nrow , &ncolumn , &errmsg );	//age,sex,17,male,18,female, 结果集为每一行平铺的一维数组
+	 if(iret==SQLITE_OK)
+	 {
+		  for(int i=1;i<=nrow;i++)
+		  {
+			  
+			  string strdn=azResult[i*ncolumn+0];
+			  string strserize=azResult[i*ncolumn+1];
+			  if(strserize!="")
+			  {
+				  DNuser user;
+				  user.Unserialize(strserize);
+				  //重新加载的时候，将状态置为初始状态
+				  user.m_agentstatus = DNuser::DN_Waiting_ready;
+				  if(user.m_agentstatus==DNuser::DN_Waiting_ready)
+					  ManagerDN::SetDNsemaSignal();
+				  dnset[strdn]=user;
+			  }			
+		  }
+	 }
+	 else
+	 {
+		CreateTable();
+	 }
+	 
+	 sqlite3_free_table(azResult);
+
+}
+bool SqlitePersist::CreateDB(string daname)
+{
+	int iret = sqlite3_open(daname.c_str(),&m_pdb);
+	if(iret==SQLITE_OK)
+		return true;
+	return false;
+}
+bool SqlitePersist::CloseDB()
+{
+	int iret = sqlite3_close(m_pdb);
+	return true;
+}
+bool SqlitePersist::CreateTable()
+{
+// 	if(!IsExistTable())
+// 		return false;
+	char*errmsg=NULL;
+	int iret = sqlite3_exec(m_pdb,"create table dnuser(strdn varchar(255) ,strserize varchar(255))",NULL,NULL,&errmsg);
+	if(iret==SQLITE_OK)
+		return true;
+	return false;
+}
+bool SqlitePersist::IsExistTable()
+{
+	std::string strFindTable = "SELECT COUNT(*) FROM 'dnuser' ";
+	int nrow = 0;
+	int ncolumn = 0;
+	char ** azResult; //返回结果集
+	char*errmsg=NULL;
+	int iret= sqlite3_get_table(m_pdb , strFindTable.c_str() , &azResult , &nrow , &ncolumn , &errmsg );	//age,sex,17,male,18,female, 结果集为每一行平铺的一维数组
+	if(iret==SQLITE_OK)
+		return true;
+	return false;
+}
+bool SqlitePersist::InsertTable(DNuser&user)
+{
+	string sqlstr = "Insert into  dnuser (strdn  ,strserize ) values";
+	char charsql[1024]={0};
+	sprintf(charsql,"%s('%s','%s') ",sqlstr.c_str(),user.m_DN.c_str(),user.serialize().c_str());
+	char*errmsg=NULL;
+	int iret = sqlite3_exec(m_pdb,charsql,NULL,NULL,&errmsg);
+	if(iret==SQLITE_OK)
+		return true;
+	return false;
+}
+bool SqlitePersist::DeleteTable(DNuser&user)
+{
+	string sqlstr = "delete from  dnuser where strdn = ";
+	char charsql[1024]={0};
+	sprintf(charsql,"%s'%s'",sqlstr.c_str(),user.m_DN.c_str());
+	char*errmsg=NULL;
+	int iret = sqlite3_exec(m_pdb,charsql,NULL,NULL,&errmsg);
+	if(iret==SQLITE_OK)
+		return true;
+	return false;
+}
+bool SqlitePersist::Changestate(DNuser&user)
+{
+	DeleteTable(user);
+	return InsertTable(user);
+}
+
 
 map<string,ivrsession> ManagerDN::m_ivrmap;
 xEmutex ManagerDN::m_agentlock;
 xSemaphore ManagerDN::m_readyDNsema;
+xSemaphore ManagerDN::m_calloutsema;
+string ManagerDN::m_fsip;
+int ManagerDN::m_fsport;
+string ManagerDN::m_fspwd;
+
+string ManagerDN::m_mysqlip;
+int ManagerDN::m_mysqlport;
+string ManagerDN::m_mysqluser;
+string ManagerDN::m_mysqlpwd;
+
+string ManagerDN::m_prefix;	//拨打电话前缀
+int ManagerDN::m_tcpbussinessPort;
+int ManagerDN::m_wsbussinessPort;
+string ManagerDN::m_ServerIP;
+
 ManagerDN::ManagerDN()
 {
 
@@ -52,6 +205,7 @@ bool ManagerDN::checkvaildDN(string dnid)
 		{
 			return  true;
 		}
+		iteroute++;
 	}
 	return false;
 }
@@ -68,7 +222,7 @@ bool ManagerDN::checkPasswd(string dnid,string pwd)
 int ManagerDN::Signin(const std::string& agentId,
 	const std::string& agentDn, const std::string& agentPwd,
 	const int & statusChangetype, bool autoAnswer,
-	bool fcSignin, const std::string& skills,
+	bool fcSignin, const std::string& skills,int department_id,const std::string department_name,string user_name,
 	string peerIP,wsServer *s, websocketpp::connection_hdl hdl)
 {
 	map<string,DNuser>::iterator ite=m_DNmap.begin();
@@ -78,15 +232,17 @@ int ManagerDN::Signin(const std::string& agentId,
 		if(ite==m_DNmap.end()) //从未登陆过
 		{
 
-			DNuser user(agentId,agentDn,agentPwd,statusChangetype,autoAnswer,fcSignin,skills,peerIP,s,hdl);
+			DNuser user(agentId,agentDn,agentPwd,statusChangetype,autoAnswer,fcSignin,skills,peerIP,s,hdl,department_id,department_name,user_name);
 			string commpanyid = GetcompanyidbyDN(agentDn);
 			if(statusChangetype==DNuser::DN_Waiting_ready)
 				SetDNsemaSignal();
 			user.inline_Setcompanyid(atoi(commpanyid.c_str()));
  			m_DNmap.insert(pair<string ,DNuser>(agentDn,user));
+			m_presisted.InsertTable(user);
 
 			return DN_OPERATOR_SUCCESSED;
 		}
+		m_DNmap[agentDn].m_agentstatus = DNuser::DN_Waiting_ready;
 		return DN_HAS_SIGNINED;
 	}
 	return DN_INVALIDDN;
@@ -94,11 +250,13 @@ int ManagerDN::Signin(const std::string& agentId,
 int ManagerDN::Signout(const std::string& agentId,
 	string peerIP)
 {
+// 	if(m_DNmap.find(agentId)==m_DNmap.end())
+// 		return -1;
 	string strDN=GetDNbyagentid(agentId);
 	if(strDN!="")
 	{
+			m_presisted.DeleteTable(m_DNmap[strDN]);
 			m_DNmap.erase(strDN);
-
 			return DN_OPERATOR_SUCCESSED;
 	}
 		return DN_INVALIDDN;
@@ -113,6 +271,7 @@ int ManagerDN::SetDNstatus(const std::string& agentId,
 	{
 		 DNuser&puser=m_DNmap[strdn];
 		 puser.SetagnetStatus(agentStatus);
+		 m_presisted.Changestate(puser);
 		 return DN_OPERATOR_SUCCESSED;
 	}
 	return DN_INVALIDDN;
@@ -138,6 +297,7 @@ int ManagerDN::reloaddb()
 
 	db_operator_t::SelectRouteAgent(m_agentRoute, m_gRoute);
 	db_operator_t::Getagentandpwd(m_agentloginInfo);
+	Managerivr::Reload();
 	return 0;
 }
 int ManagerDN::loaddb()
@@ -146,7 +306,52 @@ int ManagerDN::loaddb()
 	db_operator_t::SelectRouteAgent(m_agentRoute, m_gRoute);
 	db_operator_t::Getagentandpwd(m_agentloginInfo);
 	Managerivr::Init();
+	m_presisted.LoadDNSet(m_DNmap);
 	return 0;
+}
+int ManagerDN::loadConfigini()
+{
+	inifile::IniFile   file;
+	if(!file.load("Service.ini"))
+	{
+		int iret=-1;
+		m_fsip=file.getStringValue("FREESWITCH","IP",iret);
+		if(iret!=0)
+		{
+			m_fsip="0.0.0.0";
+		}
+		m_fsport=file.getIntValue("FREESWITCH","PORT",iret);
+		if(iret!=0)
+		{
+			m_fsport=8021;
+		}
+		m_fspwd=file.getStringValue("FREESWITCH","PSSWD",iret);
+		if(iret!=0)
+		{
+			m_fspwd="tx@infosun";
+		}
+		m_prefix=file.getStringValue("TXBETA","prefix",iret);
+		if(iret!=0)
+		{
+			m_prefix="88";
+		}
+		m_ServerIP=file.getStringValue("TXBETA","serverip",iret);
+		if(iret!=0)
+		{
+			m_prefix="88";
+		}
+		m_wsbussinessPort=file.getIntValue("TXBETA","wsport",iret);
+		if(iret!=0)
+		{
+			m_wsbussinessPort=10081;
+		}
+		m_tcpbussinessPort=file.getIntValue("TXBETA","outcalltcpport",iret);
+		if(iret!=0)
+		{
+			m_tcpbussinessPort=10090;
+		}
+
+	}
 }
 int ManagerDN::startServer()
 {
@@ -174,9 +379,13 @@ int ManagerDN::startServer()
 	}
 	m_acdqueue.start();
 
-	m_apserver.InitApServer("0.0.0.0",10081,10);
+	m_Outcallmanager = CalloutManager::Instance();
+	int listenfd = m_Outcallmanager->startTcpSvr(m_ServerIP.c_str(),m_tcpbussinessPort);
+	xReactorwithThread Reactor;
+	Reactor.RegisterHandler(m_Outcallmanager,listenfd);
+	Reactor.startReactorWithThread();
+	m_apserver.InitApServer(m_ServerIP.c_str(),m_wsbussinessPort,10);
 	m_apserver.startServer();
-
 // 	ManagerDN* pmanager=ManagerDN::Instance();
 // 	pmanager->loaddb();
 
@@ -286,6 +495,9 @@ void ManagerDN::process_event(esl_handle_t *handle,
 		}
 	case ESL_EVENT_CHANNEL_ORIGINATE:
 		{
+			//添加预测式外呼功能
+			//string strtaskID=esl_event_get_header(event, "Variable_taskID") ? esl_event_get_header(event, "Variable_taskID") : "";
+
 			string is_callout;
 			strUUID = esl_event_get_header(event, "Caller-Unique-ID") ? esl_event_get_header(event, "Caller-Unique-ID") : "";
 			string sipcallid = esl_event_get_header(event, "variable_sip_call_id") ? esl_event_get_header(event, "variable_sip_call_id") : "";
@@ -395,11 +607,38 @@ void ManagerDN::process_event(esl_handle_t *handle,
 			{
 				sessionite->second.SetagnetStatus(DNuser::DN_Waiting_ready);
 				SetDNsemaSignal();
+				Setcalloutsemafree();
 			}
 			break;
 		}
 	case ESL_EVENT_CHANNEL_ANSWER:
 		{
+			//添加预测式外呼功能
+			string strtaskID=esl_event_get_header(event, "Variable_taskID") ? esl_event_get_header(event, "Variable_taskID") : "";
+			if(strtaskID!="")
+			{
+				string companyid=esl_event_get_header(event, "Variable_company_id") ? esl_event_get_header(event, "Variable_company_id") : "";
+				CalloutManager* Outcallmanager=CalloutManager::Instance();
+				//Outcallmanager.
+
+				ivrsession session;
+				session.m_uuid=  strUUID;
+				session.m_companyid=atoi(companyid.c_str());
+				session.m_currentnodeid=1;
+				m_ivrmap[strUUID] = session;
+				//esl_execute(&handle, "answer", NULL, NULL);
+
+				t_ivrnode*pnode = Managerivr::Instance()->Getnodeinfo(session.m_companyid,1,IVR_ANS_DFTM);
+				if(pnode)
+				{
+					m_ivrmap[caller_id].m_currentnodeid = pnode->node_id;
+					if(pnode->recordfile==IVR_AGNET_MSG) //转人工
+						TransformAgent(handle,session.m_uuid,session);
+					else
+						PlayBack(handle,pnode->recordfile,session.m_uuid);
+				}
+
+			}
 			map<string, callout_info_t>::iterator iter = callInfoMap.find(strUUID);
 			esl_log(ESL_LOG_INFO, " ESL_EVENT_CHANNEL_ANSWER :%s\n", strUUID.c_str());
 			if (iter != callInfoMap.end())
@@ -562,6 +801,7 @@ string ManagerDN::GetDNbyagentid(string strid)
 	{
 		if(ite->second.m_agentid==strid)
 			return ite->second.m_DN;
+		ite++;
 	}
 	return "";
 }
@@ -575,7 +815,7 @@ void *ManagerDN::Inbound_Init(void *arg)
 	esl_global_set_default_logger(ESL_LOG_LEVEL_INFO);
 
 	// status = esl_connect(&handle, "210.21.48.69", 8021, NULL, "tx@infosun");
-	status = esl_connect(&handle, "127.0.0.1", 8021, NULL, "tx@infosun");
+	status = esl_connect(&handle, m_fsip.c_str(), m_fsport, NULL, m_fspwd.c_str());
 
 	if (status != ESL_SUCCESS)
 	{
@@ -642,13 +882,15 @@ void *ManagerDN::CallOut_Task_Process(void *arg)
 void ManagerDN::nwaycc_callback(esl_socket_t server_sock, esl_socket_t client_sock, struct sockaddr_in *addr, void *userData)
 {
     esl_log(ESL_LOG_INFO, "nwaycc_callback: \n");
-	esl_handle_t handle;
+	esl_handle_t *handle=new esl_handle_t;
 	string callid;
 
-	bzero(&handle, sizeof(esl_handle_t));
+	bzero(handle, sizeof(esl_handle_t));
 
-	if (ESL_SUCCESS != esl_attach_handle(&handle, client_sock, addr)) {
-		esl_disconnect(&handle);
+	if (ESL_SUCCESS != esl_attach_handle(handle, client_sock, addr)) {
+		esl_disconnect(handle);
+		if(handle!=NULL)
+			delete handle;
 		return;
 	}
 // 	esl_events(&handle, ESL_EVENT_TYPE_PLAIN, " CHANNEL_STATE CHANNEL_CALLSTATE CHANNEL_PROGRESS_MEDIA CHANNEL_OUTGOING SESSION_HEARTBEAT  CHANNEL_ORIGINATE CHANNEL_PROGRESS  "
@@ -656,27 +898,30 @@ void ManagerDN::nwaycc_callback(esl_socket_t server_sock, esl_socket_t client_so
 // 		"TALK OUTBOUND_CHAN INBOUND_CHAN  ");
 
 
-	if (!handle.connected) {
-		esl_disconnect(&handle);
+	if (!handle->connected) {
+		esl_disconnect(handle);
+		if(handle!=NULL)
+			delete handle;
 		return;
 	}
-	esl_recv_event_timed(&handle,1000, 1, NULL);
-	std::string caller_number = esl_event_get_header(handle.info_event, "Caller-Caller-ID-Number") ? esl_event_get_header(handle.info_event, "Caller-Caller-ID-Number") : "";
+	esl_recv_event_timed(handle,1000, 1, NULL);
+	std::string caller_number = esl_event_get_header(handle->info_event, "Caller-Caller-ID-Number") ? esl_event_get_header(handle->info_event, "Caller-Caller-ID-Number") : "";
 	//esl_log(ESL_LOG_INFO, "nwaycc_callback:caller_number=%s \n",caller_number.c_str());
-    std::string called_number = esl_event_get_header(handle.info_event, "Caller-Destination-Number") ? esl_event_get_header(handle.info_event, "Caller-Destination-Number") : "";
+    std::string called_number = esl_event_get_header(handle->info_event, "Caller-Destination-Number") ? esl_event_get_header(handle->info_event, "Caller-Destination-Number") : "";
     esl_log(ESL_LOG_INFO, "nwaycc_callback:caller_number=%s,called_number=%s \n",caller_number.c_str(),called_number.c_str());
 
     string companyid = GetCompanyIdFromgate(called_number);
     if(companyid=="")   //说明不属于我们配置的网关
         return;
-	esl_execute(&handle, "answer", NULL, NULL);
-	esl_execute(&handle, "park", NULL, NULL);
-	char*fs_resp = esl_event_get_header(handle.last_sr_event, "Reply-Text");
-	callid = esl_event_get_header(handle.info_event, "caller-unique-id");
+	esl_execute(handle, "answer", NULL, NULL);
+	esl_execute(handle, "park", NULL, NULL);
+	char*fs_resp = esl_event_get_header(handle->last_sr_event, "Reply-Text");
+	callid = esl_event_get_header(handle->info_event, "caller-unique-id");
     ivrsession session;
     session.m_uuid=  callid;
     session.m_companyid=atoi(companyid.c_str());
     session.m_currentnodeid=1;
+	session.m_newhandle=handle;
     m_ivrmap[callid] = session;
 	//esl_execute(&handle, "answer", NULL, NULL);
 
@@ -685,12 +930,21 @@ void ManagerDN::nwaycc_callback(esl_socket_t server_sock, esl_socket_t client_so
  	{
 		m_ivrmap[callid].m_currentnodeid = pnode->node_id;
  		if(pnode->recordfile==IVR_AGNET_MSG) //转人工
- 			TransformAgent(&handle,session.m_uuid,session);
+ 		{
+			TransformAgent(handle,session.m_uuid,session);
+			return;
+		}
  		else
- 			PlayBack(&handle,pnode->recordfile,session.m_uuid);
+		{
+ 			PlayBack(handle,pnode->recordfile,session.m_uuid);
+			if(handle!=NULL)
+				delete handle;
+			handle=NULL;
+			return;
+		}
  	}
 	//esl_execute(&handle, "bridge", "user/1005", NULL);
-	esl_disconnect(&handle);
+	//esl_disconnect(&handle);
 	return;
 
 }
@@ -707,7 +961,7 @@ void *ManagerDN::Heatbeat_Process(void *arg)
 	char uuid[128]; //从fs中获得的uuid
 	//Then running the Call_Task string when added a new Task,then remove it
 
-	status = esl_connect(&handle, "127.0.0.1", 8021, NULL, "tx@infosun");
+	status = esl_connect(&handle, m_fsip.c_str(),m_fsport, NULL, m_fspwd.c_str());
 	esl_global_set_default_logger(ESL_LOG_LEVEL_INFO);
 
 	if (status != ESL_SUCCESS)
@@ -731,6 +985,12 @@ void *ManagerDN::Heatbeat_Process(void *arg)
 		sleep(60);
 	}
 }
+static void Outcall(int condpayid,string taskid,string phonecall)
+{
+	//char callCmd[256]={0};
+	//sprintf(callCmd,"bgapi originate {ignore_early_media=true,company_id=%d,taskID=%s}sofia/gateway/ingw/88%s &park()",condpayid,taskid.c_str(),phonecall.c_str());
+//	esl_send_recv(&handle,callCmd);  
+}
 void ManagerDN::PlayBack(esl_handle_t *handle, string recorefile, string uuid)
 {
 	 esl_execute(handle, "break", NULL, uuid.c_str());
@@ -740,21 +1000,37 @@ void ManagerDN::PlayBack(esl_handle_t *handle, string recorefile, string uuid)
 void ManagerDN::TransformAgent(esl_handle_t *handle,string uuid,ivrsession session)
 {
 		session.m_handle=handle;
-		session.m_uuid=uuid;   
+		session.m_uuid=uuid;  
+		printf("in  ManagerDN::TransformAgent in_queue\n");
 		Instance()->m_acdqueue.in_queue(session);
 }
 void ManagerDN::inline_TransformAgent(string strdn,ivrsession session)
 {
-
+	printf("in ManagerDN::inline_TransformAgent strdn:%s\n",strdn.c_str());
 	Instance()->m_DNmap[strdn].SetagnetStatus(DNuser::DN_Ringing);
+	Instance()->m_presisted.Changestate(Instance()->m_DNmap[strdn]);
 	char allagent[16]={0};
 	sprintf(allagent,"user/%s",strdn.c_str());
 	esl_execute(session.m_handle, "break", NULL, session.m_uuid.c_str());
-	esl_execute(session.m_handle, "bridge", /*"user/1005"*/allagent,session.m_uuid.c_str());
+	esl_status_t iret = esl_execute(session.m_handle, "bridge", /*"user/1005"*/allagent,session.m_uuid.c_str());
+	printf("allagent=%s,uuid=%s,iret=%d\n",allagent,session.m_uuid.c_str(),iret);
+	if(session.m_newhandle!=NULL)
+	{
+		delete session.m_newhandle;
+		session.m_newhandle=NULL;
+	}
 }
 void ManagerDN::SetDNsemaSignal()
 {
 	m_readyDNsema.signal();
+}
+string ManagerDN::GetPrefixnum()
+{
+	return m_prefix;
+}
+void ManagerDN::GetFSconfig(string& ip,string& pwd,int& port)
+{
+	ip=m_fsip;pwd=m_fspwd;port=m_fsport;
 }
 string ManagerDN::GetCompanyIdFromgate(string gatenum)
 {
@@ -766,4 +1042,85 @@ string ManagerDN::GetCompanyIdFromgate(string gatenum)
             ite++;
         }
         return "";
+}
+int  ManagerDN::GetUserInfolist(string agentid,string department_id,string status,vector<DNuser>&userinfo)
+{
+	if(Instance()->m_DNmap.find(agentid)==Instance()->m_DNmap.end())
+		return DN_INVALIDDN;
+	 map<string,DNuser>::iterator ite=Instance()->m_DNmap.begin();
+	 while(ite!=Instance()->m_DNmap.end())
+	 {
+		if(department_id=="")	//获取全部department下的坐席
+		{
+			if(status=="0")		//获取所有状态的坐席
+			{
+				userinfo.push_back(ite->second);
+			}
+			else			//获取对应状态下的坐席
+			{
+				if(ite->second.m_agentstatus == atoi(status.c_str()))
+				{
+					userinfo.push_back(ite->second);
+				}
+			}
+		}
+		else				//获取对应department的坐席
+		{
+			if(ite->second.m_department_id == atoi(department_id.c_str()))
+			{
+				if(status=="0")		//获取所有状态的坐席
+				{
+					userinfo.push_back(ite->second);
+				}
+				else			//获取对应状态下的坐席
+				{
+					if(ite->second.m_agentstatus == atoi(status.c_str()))
+					{
+						userinfo.push_back(ite->second);
+					}
+				}
+			}
+
+		}
+		ite++;
+	 }
+	 return DN_OPERATOR_SUCCESSED;
+}
+int ManagerDN::ResetDNinfo(string agentid,int department_id,string department_name,string user_name)
+{
+	  if(m_DNmap.find(agentid)==m_DNmap.end())
+		  return -1;
+	  DNuser&user=m_DNmap[agentid];
+	  user.m_department_id=department_id;
+	  user.m_department_name = department_name;
+	  user.m_user_name=user_name;
+	  user.m_agentstatus=DNuser::DN_Waiting_ready;
+
+}
+
+int  ManagerDN::GetWaitingDN(int companyid)
+{
+	int num=0;
+	map<string,DNuser>::iterator ite = Instance()->m_DNmap.begin();
+	while (ite!=Instance()->m_DNmap.end())
+	{
+		if(companyid == ite->second.m_commpanyid)
+		{
+			if( ite->second.m_agentstatus == DNuser::DN_Waiting_ready)
+			{
+				//ite->second.SetagnetStatus(DNuser::DN_Ringing);
+				num++;
+			}
+		}
+		ite++;
+	}
+	return num;
+}
+int ManagerDN::Setcalloutsemafree()
+{
+	m_calloutsema.signal();
+}
+int ManagerDN::Waitcalloutsema()
+{
+	m_calloutsema.wait();
 }

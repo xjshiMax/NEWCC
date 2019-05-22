@@ -12,6 +12,7 @@ void ACDqueue::run()
 		m_q.get(tvalue,INFINITE);
 		string stdDN =  ManagerDN::Instance()->GetavailableAgent(tvalue.m_companyid);
 		//m_q.get(tvalue,INFINITE);
+		printf("ACDqueue::run have get a DN,then turn to inline_TransformAgent\n");
 		ManagerDN::Instance()->inline_TransformAgent(stdDN,tvalue);
 	}
 }

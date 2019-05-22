@@ -1,0 +1,83 @@
+发送：{
+	"Action": "SignIn",
+	"param": {
+		"agentId": "1005",
+		"agentDn": "1005",
+		"agentPwd":"123123",
+		"statusChangetype":1,
+		"autoAnswer":false,
+		"fcSignin":true,
+		"skills":"high",
+		"handle":0
+		
+	}
+
+}
+返回：{
+   "operator" : "SignIn",
+   "param" : [
+      {
+         "agentId" : "1005",
+         "desc" : ""
+      }
+   ],
+   "result" : 1001
+}
+
+发送：{
+	"Action": "SignOut",
+		"param": {
+			"handle":8,
+			"agentId": "1005"
+		}
+}
+返回：{
+   "operator" : "SignOut",
+   "param" : [
+      {
+         "agentId" : "1005",
+         "desc" : ""
+      }
+   ],
+   "result" : 1001
+}
+发送：{
+	"Action": "GetAgentStatus",
+		"param": {
+			"handle":3,
+			"agentId": "1005"
+		}
+}
+返回：{
+   "operator" : "getAgentStatus",
+   "param" : [
+      {
+         "agentId" : "1005",
+         "agentStatus" : 1,
+         "desc" : ""
+      }
+   ],
+   "result" : 1001
+}
+
+{
+	"Action": "SetAgentStatus",
+		"param": {
+			"handle":3,
+			"agentId": "1005",
+			"restReason": "eating",
+			"agentStatus":4
+			
+		}
+}
+返回：{
+   "operator" : "SetAgentStatus",
+   "param" : [
+      {
+         "agentId" : "1005",
+         "desc" : ""
+      }
+   ],
+   "result" : 1001
+}
+

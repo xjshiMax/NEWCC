@@ -151,6 +151,107 @@ bool db_operator_t::GetivrTable(vector<t_ivrnode>&nodetable)
 
 	return nSuccess;
 }
+
+bool db_operator_t::GetJavaUserInfo(string userid,t_Java_userInfo&userinfo)
+{
+	//int nSuccess = 0;
+
+	Statement *state;
+	Connection *cmd;
+	ResultSet *result;
+	bool iret =false;
+	try
+	{
+		cmd = DBPool::GetInstance()->GetConnection();
+		if (cmd == NULL)
+		{
+			printf("Connection *cmd = dbIn==NULL....\n");
+		}
+		Route route;
+		state = cmd->createStatement();
+		state->execute("use master_outdial");
+
+		string query = "select * from t_user_tbl where ext_number = '"+userid;
+		query+="' "	;
+		result = state->executeQuery(query);
+		while (result->next())
+		{
+			//t_ivrnode node;
+			userinfo.enterprise_id = result->getInt("enterprise_id");
+			userinfo.company_id = result->getInt("company_id");
+			userinfo.email =   result->getString("email");
+			userinfo.department_id =  result->getInt("department_id");
+			userinfo.login_ip = result->getString("login_ip");
+			userinfo.mobile = 	result->getString("mobile");
+			userinfo.nick_name	= result->getString("nick_name");
+			userinfo.password  = result->getString("password");
+			userinfo.skill_id  = result->getString("skill_id");
+			userinfo.ext_number = result->getString("ext_number");
+			userinfo.delete_status =   result->getInt("delete_status");
+			userinfo.user_name =  result->getString("user_name");
+			iret=true;
+		}
+
+	}
+	catch (sql::SQLException &ex)
+	{
+		printf("SelectSql error:%s\n", ex.what());
+		//nSuccess = -1;
+	}
+	delete result;
+	delete state;
+	DBPool::GetInstance()->ReleaseConnection(cmd);
+
+	return iret;
+}
+bool db_operator_t::GetjavauserInfoList(vector<t_Java_userInfo>&userlist)
+{
+	Statement *state;
+	Connection *cmd;
+	ResultSet *result;
+	bool iret =false;
+	try
+	{
+		cmd = DBPool::GetInstance()->GetConnection();
+		if (cmd == NULL)
+		{
+			printf("Connection *cmd = dbIn==NULL....\n");
+		}
+		Route route;
+		state = cmd->createStatement();
+		state->execute("use master_outdial");
+
+		string query = "select * from t_user_tbl ";
+		result = state->executeQuery(query);
+		while (result->next())
+		{
+			t_Java_userInfo userinfo;
+			userinfo.enterprise_id = result->getInt("enterprise_id");
+			userinfo.company_id = result->getInt("company_id");
+			userinfo.email =   result->getInt("email");
+			userinfo.department_id =  result->getInt("department_id");
+			userinfo.login_ip = result->getInt("department_id");
+			userinfo.mobile = 	result->getInt("mobile");
+			userinfo.nick_name	= result->getInt("nick_name");
+			userinfo.password  = result->getInt("password");
+			userinfo.skill_id  = result->getInt("skill_id");
+			userlist.push_back(userinfo);
+			iret=true;
+		}
+
+	}
+	catch (sql::SQLException &ex)
+	{
+		printf("SelectSql error:%s\n", ex.what());
+		//nSuccess = -1;
+	}
+	delete result;
+	delete state;
+	DBPool::GetInstance()->ReleaseConnection(cmd);
+
+	return iret;
+}
+
 bool db_operator_t::SelectRouteAgent(map<string, vector<agent_t> > &agents, vector<Route> &vRoute)
 {
     int nSuccess = 0;
@@ -248,4 +349,89 @@ bool db_operator_t::insertRegInfo(const string &agent, const reg_info_t &regInfo
 
     return nSuccess;
 }
+bool db_operator_t::Getpermission(string agentid,bool&iSPermited)
+{
+	Statement *state;
+	Connection *cmd;
+	ResultSet *result;
+	bool iret =false;
+	iSPermited=true;
+	try
+	{
+		cmd = DBPool::GetInstance()->GetConnection();
+		if (cmd == NULL)
+		{
+			printf("Connection *cmd = dbIn==NULL....\n");
+		}
+		Route route;
+		state = cmd->createStatement();
+		state->execute("use master_outdial");
 
+		string query = "select delete_status from t_user_role where user_id='"+agentid;
+		query+="' ";
+		result = state->executeQuery(query);
+		while (result->next())
+		{
+			// delete_status == 
+			
+			iret=true;
+		}
+
+	}
+	catch (sql::SQLException &ex)
+	{
+		printf("SelectSql error:%s\n", ex.what());
+		//nSuccess = -1;
+	}
+	delete result;
+	delete state;
+	DBPool::GetInstance()->ReleaseConnection(cmd);
+
+	return iret;
+}
+
+bool db_operator_t::GetOutcalllist(vector<t_Outcallinfo>&phonelist)
+{
+	Statement *state;
+	Connection *cmd;
+	ResultSet *result;
+	bool iret =false;
+	//iSPermited=true;
+	try
+	{
+		cmd = DBPool::GetInstance()->GetConnection();
+		if (cmd == NULL)
+		{
+			printf("Connection *cmd = dbIn==NULL....\n");
+		}
+		Route route;
+		state = cmd->createStatement();
+		state->execute("use master_outdial");
+
+		string query = "select * from outdial_task_tbl ";
+		result = state->executeQuery(query);
+		while (result->next())
+		{
+			t_Outcallinfo info;
+			info.task_id = 	result->getString("task_id");
+			info.sex = 		result->getString("sex");
+			info.name = 	result->getString("name");
+			info.phone = 	result->getString("phone");
+			info.company_id = 	result->getInt("company_id");
+
+			phonelist.push_back(info);
+			iret=true;
+		}
+
+	}
+	catch (sql::SQLException &ex)
+	{
+		printf("SelectSql error:%s\n", ex.what());
+		//nSuccess = -1;
+	}
+	delete result;
+	delete state;
+	DBPool::GetInstance()->ReleaseConnection(cmd);
+
+	return iret;
+}

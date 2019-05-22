@@ -3,12 +3,12 @@
 #pragma  once
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
+#include "common/DBOperator.h"
 //#include "acdcommon.h"
 using websocketpp::lib::bind;
 using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
 using namespace std;
-using namespace websocketpp;
 // pull out the type of messages sent by our config
 typedef websocketpp::server<websocketpp::config::asio> wsServer;
 typedef wsServer::message_ptr message_ptr;
@@ -21,7 +21,7 @@ public:
 		WSAP_ResetSkill,WSAP_Reset,
 		WSAP_OutboundCall,WSAP_AnswerCall,WSAP_ReleaseCall,WSAP_Hold,WSAP_Retrieve,WSAP_Consult,WSAP_ConsultReconnect,WSAP_ConsultTransfer,WSAP_SingleStepTransfer,WSAP_ConsultConference
 		,WSAP_ConferenceJoin,WSAP_SetAssociateData,WSAP_GetAssociateData,WSAP_JumptheQueue,WSAP_ForceSignIn,
-		WSAP_ResetConfig,
+		WSAP_ResetConfig, WSAP_getusers, WSAP_Heartbeat,
 		WSAP_ERRORTYPE
 	};
 	WSapserver();
@@ -39,9 +39,15 @@ public:
  	string Onresponse(int code,string desc,string agentId,string strkey2,string param2);
 	string Onresponse(int code,string desc,string agentId,string strkey2,string param2,string operation);
 	string Onresponse(int code,string desc,string agentId,string strkey2,int param2,string operation);
-	string OnSignIn(int code,string desc,string agentId,int64_t handle);
+	string OnSignIn(int code,string desc,string agentId,t_Java_userInfo&userinfo);
+	string Onreset(int code,string desc,string agentId,t_Java_userInfo&userinfo);
 	string OngetAgentStatus(int code,string desc,string agentId,int status);
-	string OnparamError(int code,string desc,string agentId);
+	string OnparamError(int code,string desc,string agentId,string operaton);
+	string Ondail(int code,string desc,string agentId,bool bforbidden);
+	string Onheartbeat(int code,string desc,string agentId);
+	int FindJavaUserInfo(string userid,t_Java_userInfo&userinfo);
+	void GetJavauserInfoList(vector<t_Java_userInfo>&userinfolist);
+	bool GetPermission(string userid) ;
 
 	static void Sendevent2dn(wsServer* s, websocketpp::connection_hdl hdl,string msg,string agentId,int64_t handle,int code);
 private:

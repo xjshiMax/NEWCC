@@ -1,0 +1,171 @@
+{	
+	"action":"login",
+	"param":
+	{
+		"userId":"1006",
+		"password" : "1234"
+	},
+	"token":""
+}
+	
+	
+{	
+	"action":"ResetConfig",
+	"param":
+	{
+		"userId":"1006",
+		"password" : "1234",
+		"acdpassword":"123456"
+	},
+	"token":""
+}
+	
+{
+   "cause" : "",
+   "event" : "ResetConfig",
+   "param" : {
+      "agentId" : ""
+   },
+   "result" : 0,
+   "token" : ""
+}
+
+
+{	
+	"action":"login",
+	"param":
+	{
+		"userId":"1005",
+		"password" : "1234"
+	},
+	"token":""
+}
+
+{
+   "cause" : "",
+   "event" : "onlogin",
+   "param" : {
+      "agentInfo" : {
+         "department" : 0,
+         "enableConference" : "1",
+         "enabletransferToIVR" : "1",
+         "freeswitchMediaAddr" : "",
+         "freeswitchRegAddr" : "",
+         "nickName" : "3",
+         "phoneNum" : "",
+         "role" : "",
+         "userId" : "1005"
+      },
+      "agentStatus" : {
+         "callId" : "",
+         "callType" : "0",
+         "heldtarget" : "",
+         "lastState" : "1",
+         "privateData" : "",
+         "status" : "1",
+         "target" : "",
+         "targetType" : "",
+         "userId" : "1005"
+      }
+   },
+   "result" : 1001,
+   "token" : ""
+}
+
+发送：{	
+		"action":"logout",
+		"param":
+		{
+			"userId":"1005"
+		},
+"token":""
+	}
+
+返回：{
+   "cause" : "",
+   "event" : "onlogout",
+   "param" : {
+      "agentId" : "1005"
+   },
+   "result" : 1001,
+   "token" : ""
+}
+
+发送：{	
+		"action":"heartbeat",
+		"param":
+		{
+			"userId":"1000"
+		},
+"token":""
+	}
+
+
+返回：{
+   "cause" : "",
+   "event" : "onheartbeat",
+   "param" : {
+      "userId" : "1000"
+   },
+   "result" : 0,
+   "token" : ""
+}
+
+{	
+	"action":"reset",
+	"param":
+	{
+		"userId":"1005"
+	},
+"token":""
+}
+
+返回：{
+   "cause" : "",
+   "event" : "onreset",
+   "param" : {
+      "department" : 0,
+      "enableConference" : "1",
+      "enabletransferToIVR" : "1",
+      "nickName" : "3",
+      "phoneNum" : "",
+      "userId" : "1005"
+   },
+   "result" : -1,
+   "token" : ""
+}
+
+{	
+	"action":"getusers",
+	"param":
+	{
+		"userId":"1005",
+		"department":"1",
+		"state":"1"
+	},
+	"token":""
+}
+
+{
+   "cause" : "",
+   "data" : [
+      {
+         "department" : 81,
+         "users" : [
+            {
+               "id" : "1005",
+               "name" : ""
+            },
+            {
+               "id" : "1006",
+               "name" : ""
+            }
+         ]
+      }
+   ],
+   "event" : "ongetusers",
+   "result" : 1001
+}
+
+
+

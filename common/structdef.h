@@ -152,4 +152,55 @@ struct t_ivrnode
 		recordfile="";
 	}
 };
+struct t_Java_userInfo
+{
+	 int user_id;
+	 string user_name;
+	 string nick_name;
+	 string password;
+	 int department_id;
+	 int company_id;
+	 int enterprise_id;
+	 string skill_id;
+	 string mobile;
+	 string ext_number;
+	 int delete_status;
+	 string email;
+	 string userable_status;
+	 string login_ip;
+	 t_Java_userInfo()
+	 {
+		 user_id=0;
+		 user_name="";
+		 nick_name="";
+		 password="";
+		 department_id=0;
+		 company_id=0;
+		 enterprise_id=0;
+		 skill_id="";
+		 mobile="";
+		 email="";
+		 userable_status="";
+		 login_ip="";
+		 ext_number="";
+		 delete_status=0;
+	 }
+};
+
+struct t_Outcallinfo
+{
+	 string  phone;
+	 string name;
+	 string task_id;
+	 int company_id;
+	 string sex;
+	 t_Outcallinfo()
+	 {
+		 phone="";
+		 name="";
+		 task_id="";
+		 company_id=0;
+		 sex="";
+	 }
+};
 #endif
