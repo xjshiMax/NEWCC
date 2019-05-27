@@ -27,7 +27,9 @@ public:
 	m_agentid(agentId),m_DN(agentDn),m_agentPwd(agentPwd),m_agentstatus(statusChangetype),m_autoAnswer(autoAnswer),
 		m_fcSignin(fcSignin),m_skills(skills),m_s(s),m_hdl(hdl),m_peerIP(peerIP),m_department_id(department_id),m_department_name(department_name),m_user_name(user_name)
 	{
-
+		m_calltimes=0;
+		m_callminiutes=0;
+		m_idelminiutes=time(NULL);
 	}
 	virtual ~DNuser(){}
 	enum DN_agentStatus
@@ -47,6 +49,16 @@ public:
 
 
 	};
+	enum DN_choose_rule
+	{
+		DNRULE_ring_all=0,
+		DNRULE_long_idel_agent,
+		DNRULE_select,
+		DNRULE_top_down,
+		DNRULE_agent_with_least_talk_time,
+		DNRULE_agent_with_fewest_calls,
+		DNRULE_sequentially_by_agent_order
+	} ;
 	int m_commpanyid;
 	string m_DN;
 	string m_agentid;
@@ -69,6 +81,12 @@ public:
 	void GetagnetStatus(int& agentStatus);
 	string serialize();
 	void Unserialize(string serizestr);
+	int Getidelminiute(); //获取空闲总时长
+
+	int m_calltimes;	//接电话次数
+	int m_callminiutes;	//通话总时长
+	int m_idelminiutes; //登录初始时间
+
 };
 class SqlitePersist
 {
@@ -145,6 +163,13 @@ public:
 	static void SetDNsemaSignal();
 	string GetPrefixnum();
 	void GetFSconfig(string& ip,string& pwd,int& port);
+	static string GetAgent_ringall(int companyid);
+	static string GetAgent_idel_agent(int companyid); //选择空闲时间最长的
+	static string GetAgent_robin(int companyid);		//轮训
+	static string GetAgent_Top_down(int companyid);	//固定的顺序选择
+	static string GetAgent_least_talk_time(int companyid);//选择通话时间最短的坐席
+	static string GetAgent_fewest_calls(int companyid);	 //选择通话次数最少的坐席
+	static string GetAgent_agent_order(int companyid);	 //根据梯队和顺序选择
 
 	static int GetUserInfolist(string agentid,string department_id,string status,vector<DNuser>&userinfo);
  	map<string,DNuser> m_DNmap;		//dn
@@ -190,4 +215,8 @@ public:
 	  static int m_tcpbussinessPort;
 	  static int m_wsbussinessPort;
 	  static string m_ServerIP;
+	  static string m_FSXMLPATH;
+
+	  static int m_DNChooseRule;
+	  static map<int,int> m_compyidDNrulemap; //companyid---DNchooserule;
 };

@@ -106,6 +106,46 @@ bool db_operator_t::Getagentandpwd(map<string,string>&agents)
 
 	return nSuccess;
 }
+bool db_operator_t::GetDNchooserule(map<int,int>&DNrule)
+{
+	int nSuccess = 0;
+
+	Statement *state;
+	Connection *cmd;
+	ResultSet *result;
+
+	try
+	{
+		cmd = DBPool::GetInstance()->GetConnection();
+		if (cmd == NULL)
+		{
+			printf("Connection *cmd = dbIn==NULL....\n");
+		}
+		Route route;
+		state = cmd->createStatement();
+		state->execute("use master_outdial");
+
+		string query = "select * from acd_rule";
+		result = state->executeQuery(query);
+		while (result->next())
+		{
+			int company_id = result->getInt("company_id");
+			int ivr_rule  = result->getInt("ivr_rule");
+			DNrule.insert(pair<int,int>(company_id,ivr_rule));
+		}
+
+	}
+	catch (sql::SQLException &ex)
+	{
+		printf("SelectSql error:%s\n", ex.what());
+		nSuccess = -1;
+	}
+	delete result;
+	delete state;
+	DBPool::GetInstance()->ReleaseConnection(cmd);
+
+	return nSuccess;
+}
 bool db_operator_t::GetivrTable(vector<t_ivrnode>&nodetable)
 {
 	int nSuccess = 0;
@@ -281,6 +321,8 @@ bool db_operator_t::SelectRouteAgent(map<string, vector<agent_t> > &agents, vect
             route.group = group;
             route.agent = result->getString("agent_number");
             route.group_id = result->getString("group_id");
+			route.gataname = result->getString("route_name");
+			route.prefix = result->getString("prefix");
             vRoute.push_back(route);
         }
 

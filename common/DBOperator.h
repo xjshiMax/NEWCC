@@ -14,6 +14,7 @@ public:
     static bool insertCallInfoSql(const callout_info_t& callInfo);
     static bool SelectRouteAgent(map<string,vector<agent_t> >& agents,vector<Route>& vRoute);
 	static bool Getagentandpwd(map<string,string>&agents);
+	static bool GetDNchooserule(map<int,int>&DNrule);
 	static bool GetivrTable(vector<t_ivrnode>&nodetable);
 	static bool GetJavaUserInfo(string userid,t_Java_userInfo&userinfo);
 	static bool GetjavauserInfoList(vector<t_Java_userInfo>&userlist);

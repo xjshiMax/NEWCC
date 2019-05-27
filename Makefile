@@ -8,6 +8,7 @@ LIBS = -L./mysqlcnn/lib64/
 LIBS += -L./base/jsoncpp/lib/ -ljson-cpp
 LIBS += -L./base/output/lib/linux/ -lseabase
 LIBS += -L./base/sqlite3/lib/linux/ -lsqlite3
+LIBS += -L./base/pugixml/lib/linux/ -lpugixml
 LIBS += -L/home/workstation/boost_1_47_0/stage/lib -lboost_system
 SRC =   main.cpp ./base/inifile/inifile.cpp \
 	   WS_ApServer.cpp DNManager.cpp IVRmanager.cpp ACDqueue.cpp CalloutManager.cpp \

@@ -64,6 +64,11 @@ void DNuser::Unserialize(string serizestr)
 		//m_hdl=0;
 	}
 }
+int DNuser::Getidelminiute()
+{
+	 int currenttime=time(NULL);
+	 return currenttime - m_idelminiutes - m_callminiutes;
+}
 void SqlitePersist::LoadDNSet(map<string,DNuser>&dnset)
 {
 	string dbname="data.db";
@@ -181,7 +186,9 @@ string ManagerDN::m_prefix;	//拨打电话前缀
 int ManagerDN::m_tcpbussinessPort;
 int ManagerDN::m_wsbussinessPort;
 string ManagerDN::m_ServerIP;
-
+string ManagerDN::m_FSXMLPATH;
+int   ManagerDN::m_DNChooseRule=DNuser::DNRULE_select;
+map<int,int> ManagerDN::m_compyidDNrulemap;
 ManagerDN::ManagerDN()
 {
 
@@ -297,6 +304,7 @@ int ManagerDN::reloaddb()
 
 	db_operator_t::SelectRouteAgent(m_agentRoute, m_gRoute);
 	db_operator_t::Getagentandpwd(m_agentloginInfo);
+	db_operator_t::GetDNchooserule(m_compyidDNrulemap);
 	Managerivr::Reload();
 	return 0;
 }
@@ -305,6 +313,7 @@ int ManagerDN::loaddb()
 	db_operator_t::initDatabase();
 	db_operator_t::SelectRouteAgent(m_agentRoute, m_gRoute);
 	db_operator_t::Getagentandpwd(m_agentloginInfo);
+	db_operator_t::GetDNchooserule(m_compyidDNrulemap);
 	Managerivr::Init();
 	m_presisted.LoadDNSet(m_DNmap);
 	return 0;
@@ -329,6 +338,11 @@ int ManagerDN::loadConfigini()
 		if(iret!=0)
 		{
 			m_fspwd="tx@infosun";
+		}
+		m_FSXMLPATH=file.getStringValue("FREESWITCH","XMLPATH",iret);
+		if(iret!=0)
+		{
+			m_FSXMLPATH="/usr/local/freeswitch/conf/sip_profiles/external/";
 		}
 		m_prefix=file.getStringValue("TXBETA","prefix",iret);
 		if(iret!=0)
@@ -539,6 +553,13 @@ void ManagerDN::process_event(esl_handle_t *handle,
 			callinfo.N_record_file=strUUID + getcurrenttime() + ".mp4";
 			callInfoMap[strUUID] = callinfo;
 
+			//坐席呼入功能，进行桥接
+			string cmd="sofia/gateway";
+			char charcmd[128]={0};
+			string prefix=m_gRoute[callinfo.N_company_id].prefix;
+			string gatename=m_gRoute[callinfo.N_company_id].gataname;
+			sprintf(charcmd,"%s/%s/%s%s",cmd.c_str(),gatename.c_str(),prefix.c_str(),destination_number.c_str());
+			esl_status_t iret = esl_execute(handle, "bridge",charcmd,strUUID.c_str());
 			break;
 		}
 	case ESL_EVENT_CHANNEL_EXECUTE_COMPLETE:
@@ -603,11 +624,15 @@ void ManagerDN::process_event(esl_handle_t *handle,
 				db_operator_t::insertCallInfoSql(info);
 			}
 			map<string,DNuser>::iterator sessionite= Instance()->m_DNmap.find(destination_number);
+			string billsec = esl_event_get_header(event, "variable_duration") ? esl_event_get_header(event, "variable_duration") : "";
 			if(sessionite!=Instance()->m_DNmap.end())
 			{
 				sessionite->second.SetagnetStatus(DNuser::DN_Waiting_ready);
 				SetDNsemaSignal();
 				Setcalloutsemafree();
+
+				sessionite->second.m_callminiutes+=	atoi(billsec.c_str());
+				sessionite->second.m_calltimes++;
 			}
 			break;
 		}
@@ -761,7 +786,59 @@ agent_t *ManagerDN::find_available_agent(string callInNumber)
 }
 string ManagerDN::GetavailableAgent(int companyid)
 {
-	//map<string,DNuser>::iterator ite = Instance()->m_DNmap.begin();
+	if(m_compyidDNrulemap.find(companyid)!=m_compyidDNrulemap.end())
+		m_DNChooseRule=	m_compyidDNrulemap[companyid];
+	switch(m_DNChooseRule)
+	{
+	case DNuser::DNRULE_ring_all:
+		return GetAgent_robin(companyid);	
+	case DNuser::DNRULE_long_idel_agent:
+		return GetAgent_idel_agent(companyid);
+	case DNuser::DNRULE_select:
+		return 	GetAgent_robin(companyid);
+	case DNuser::DNRULE_top_down:
+		return 	GetAgent_robin(companyid);
+	case DNuser::DNRULE_agent_with_least_talk_time:
+		return GetAgent_least_talk_time(companyid);
+	case DNuser::DNRULE_agent_with_fewest_calls:
+		return GetAgent_fewest_calls(companyid);
+	case DNuser::DNRULE_sequentially_by_agent_order:
+		return GetAgent_robin(companyid);
+	}
+	return "";
+}
+//static string GetAgent_ringall();
+string ManagerDN::GetAgent_idel_agent(int companyid) //选择空闲时间最长的
+{
+	bool isFind=false;
+	int maxidelminiute=0;
+	string dn;
+	while(1)
+	{
+		map<string,DNuser>::iterator ite = Instance()->m_DNmap.begin();
+		while (ite!=Instance()->m_DNmap.end())
+		{
+			if(companyid == ite->second.m_commpanyid)
+			{
+				if( ite->second.m_agentstatus == DNuser::DN_Waiting_ready)
+				{
+					isFind=true;
+					if(maxidelminiute<ite->second.Getidelminiute())
+					{
+						maxidelminiute = ite->second.Getidelminiute();
+						dn=ite->first;
+					}
+				}
+			}
+			ite++;
+		}
+		if(isFind)
+			return dn;
+		m_readyDNsema.wait();
+	}
+}
+string ManagerDN::GetAgent_robin(int companyid)
+{
 	while(1)
 	{
 		map<string,DNuser>::iterator ite = Instance()->m_DNmap.begin();
@@ -777,12 +854,74 @@ string ManagerDN::GetavailableAgent(int companyid)
 			}
 			ite++;
 		}
-	  m_readyDNsema.wait();
+		m_readyDNsema.wait();
 	}
-	
+
 	return ""; // 找不到空闲坐席
-		// m_DNmap
+	// m_DNmap
 }
+//static string GetAgent_Top_down();	//固定的顺序选择
+string ManagerDN::GetAgent_least_talk_time(int companyid)//选择通话时间最短的坐席
+{
+	bool isFind=false;
+	int maxidelminiute=999999;
+	string dn;
+	while(1)
+	{
+		map<string,DNuser>::iterator ite = Instance()->m_DNmap.begin();
+		while (ite!=Instance()->m_DNmap.end())
+		{
+			if(companyid == ite->second.m_commpanyid)
+			{
+				if( ite->second.m_agentstatus == DNuser::DN_Waiting_ready)
+				{
+					isFind=true;
+					if(maxidelminiute>ite->second.m_callminiutes)
+					{
+						maxidelminiute = ite->second.m_idelminiutes	;
+						dn=ite->first;
+					}
+				}
+			}
+			ite++;
+		}
+		if(isFind)
+			return dn;
+		m_readyDNsema.wait();
+	}
+	return "";
+}
+string ManagerDN::GetAgent_fewest_calls(int companyid)	 //选择通话次数最少的坐席
+{
+	bool isFind=false;
+	int maxidelminiute=999999;
+	string dn;
+	while(1)
+	{
+		map<string,DNuser>::iterator ite = Instance()->m_DNmap.begin();
+		while (ite!=Instance()->m_DNmap.end())
+		{
+			if(companyid == ite->second.m_commpanyid)
+			{
+				if( ite->second.m_agentstatus == DNuser::DN_Waiting_ready)
+				{
+					isFind=true;
+					if(maxidelminiute>ite->second.m_calltimes)
+					{
+						maxidelminiute = ite->second.m_idelminiutes	;
+						dn=ite->first;
+					}
+				}
+			}
+			ite++;
+		}
+		if(isFind)
+			return dn;
+		m_readyDNsema.wait();
+	}
+	return "";
+}
+//static string GetAgent_agent_order();	 //根据梯队和顺序选择
 string ManagerDN::GetcompanyidbyDN(string strDN)
 {
 	vector<Route>::iterator ite= m_gRoute.begin();
@@ -904,15 +1043,23 @@ void ManagerDN::nwaycc_callback(esl_socket_t server_sock, esl_socket_t client_so
 			delete handle;
 		return;
 	}
+	 esl_log(ESL_LOG_INFO, "nwaycc_callback: 1046\n");
 	esl_recv_event_timed(handle,1000, 1, NULL);
 	std::string caller_number = esl_event_get_header(handle->info_event, "Caller-Caller-ID-Number") ? esl_event_get_header(handle->info_event, "Caller-Caller-ID-Number") : "";
 	//esl_log(ESL_LOG_INFO, "nwaycc_callback:caller_number=%s \n",caller_number.c_str());
     std::string called_number = esl_event_get_header(handle->info_event, "Caller-Destination-Number") ? esl_event_get_header(handle->info_event, "Caller-Destination-Number") : "";
     esl_log(ESL_LOG_INFO, "nwaycc_callback:caller_number=%s,called_number=%s \n",caller_number.c_str(),called_number.c_str());
-
+	esl_log(ESL_LOG_INFO, "nwaycc_callback: 1052\n");
     string companyid = GetCompanyIdFromgate(called_number);
     if(companyid=="")   //说明不属于我们配置的网关
+	{
+		esl_disconnect(handle);
+		if(handle!=NULL)
+			delete handle;
+		handle=NULL;
         return;
+	}
+	esl_log(ESL_LOG_INFO, "nwaycc_callback: 1061\n");
 	esl_execute(handle, "answer", NULL, NULL);
 	esl_execute(handle, "park", NULL, NULL);
 	char*fs_resp = esl_event_get_header(handle->last_sr_event, "Reply-Text");
@@ -937,6 +1084,7 @@ void ManagerDN::nwaycc_callback(esl_socket_t server_sock, esl_socket_t client_so
  		else
 		{
  			PlayBack(handle,pnode->recordfile,session.m_uuid);
+			esl_disconnect(handle);
 			if(handle!=NULL)
 				delete handle;
 			handle=NULL;
@@ -945,7 +1093,12 @@ void ManagerDN::nwaycc_callback(esl_socket_t server_sock, esl_socket_t client_so
  	}
 	//esl_execute(&handle, "bridge", "user/1005", NULL);
 	//esl_disconnect(&handle);
-	return;
+	esl_log(ESL_LOG_INFO, "nwaycc_callback: 1093\n");
+	esl_disconnect(handle);
+	if(	handle!=NULL)
+		delete handle;
+	handle=NULL;
+	return;	
 
 }
 void *ManagerDN::listenthread_Process(void *arg)
@@ -1016,6 +1169,7 @@ void ManagerDN::inline_TransformAgent(string strdn,ivrsession session)
 	printf("allagent=%s,uuid=%s,iret=%d\n",allagent,session.m_uuid.c_str(),iret);
 	if(session.m_newhandle!=NULL)
 	{
+		esl_disconnect(session.m_newhandle);
 		delete session.m_newhandle;
 		session.m_newhandle=NULL;
 	}

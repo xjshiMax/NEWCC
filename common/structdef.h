@@ -127,6 +127,8 @@ struct Route
 	string group;
 	string agent;
 	string group_id;
+	string gataname;
+	string prefix;
 };
 struct agent_login
 {
